@@ -1,0 +1,29 @@
+[package]
+name = "uniffi-bindgen-cpp"
+description = "C++ bindings generator for UniFFI"
+readme = "../../README.md"
+keywords = []
+categories = ["command-line-utilities"]
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[lib]
+name = "uniffi_bindgen_cpp"
+path = "src/lib.rs"
+
+[[bin]]
+name = "uniffi-bindgen-cpp"
+path = "src/main.rs"
+
+[dependencies]
+
+[package.metadata.docs.rs]
+all-features = true
+
+[lints]
+workspace = true
