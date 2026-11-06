@@ -2,7 +2,7 @@
 name = "uniffi-bindgen-cpp"
 description = "C++ bindings generator for UniFFI"
 readme = "../../README.md"
-keywords = []
+keywords = ["uniffi", "cpp", "bindings", "ffi", "codegen"]
 categories = ["command-line-utilities"]
 version.workspace = true
 edition.workspace = true
@@ -21,6 +21,13 @@ name = "uniffi-bindgen-cpp"
 path = "src/main.rs"
 
 [dependencies]
+anyhow = { workspace = true }
+camino = { workspace = true }
+clap = { workspace = true }
+serde = { workspace = true }
+toml = { workspace = true }
+uniffi_bindgen = { workspace = true }
+uniffi_meta = { workspace = true }
 
 [package.metadata.docs.rs]
 all-features = true

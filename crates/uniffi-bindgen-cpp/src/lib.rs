@@ -1,35 +1,22 @@
-//! C++ bindings generator for UniFFI
+//! A C++ bindings generator for [UniFFI](https://mozilla.github.io/uniffi-rs/).
 //!
-//! Keep the logic here, pure and testable (take data and a `now`, return data);
-//! `main.rs` only wires the outside world (args, files, clock) to it.
+//! Point it at a library built with UniFFI and it writes a C++17 header and
+//! source file per component, plus one shared runtime header:
+//!
+//! ```text
+//! uniffi-bindgen-cpp generate target/release/libmycrate.so --out-dir cpp/
+//! ```
+//!
+//! The generated code calls the scaffolding through its C ABI, so you link the
+//! Rust library into your program like any other native library.
 
-/// Splits a `key = value` line. Comments (`#`) and blank lines give `None`.
-#[must_use]
-pub fn parse_kv(line: &str) -> Option<(&str, &str)> {
-    let line = line.trim();
-    if line.is_empty() || line.starts_with('#') {
-        return None;
-    }
-    let (k, v) = line.split_once('=')?;
-    let k = k.trim();
-    (!k.is_empty()).then(|| (k, v.trim()))
-}
+mod cli;
+mod config;
+mod codegen;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn splits_and_trims() {
-        assert_eq!(parse_kv(" a = b "), Some(("a", "b")));
-        assert_eq!(parse_kv("a=b=c"), Some(("a", "b=c")));
-    }
-
-    #[test]
-    fn skips_comments_blanks_and_empty_keys() {
-        assert_eq!(parse_kv("# a = b"), None);
-        assert_eq!(parse_kv("   "), None);
-        assert_eq!(parse_kv(" = b"), None);
-        assert_eq!(parse_kv("no equals"), None);
-    }
-}
+pub use cli::run;
+pub use config::{Config, CustomTypeConfig};
+pub use codegen::{
+    CppBindingGenerator, GeneratedFiles, RUNTIME_HEADER, RUNTIME_HEADER_NAME, generate_component,
+    generate_from_udl, write_runtime,
+};

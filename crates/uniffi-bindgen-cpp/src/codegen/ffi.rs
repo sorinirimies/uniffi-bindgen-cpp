@@ -1,0 +1,73 @@
+//! The C ABI declarations of a component: structs, callback types and the
+//! `extern "C"` scaffolding functions.
+
+use std::fmt::Write;
+
+use uniffi_bindgen::interface::FfiDefinition;
+
+use super::names::escape;
+use super::types::Gen;
+
+impl Gen<'_> {
+    /// Name of the namespace holding the C declarations.
+    pub(crate) fn ffi_ns(&self) -> String {
+        format!("uniffi_ffi_{}", self.ci.namespace())
+    }
+
+    /// The whole `namespace uniffi_ffi_<ns> { ... }` block.
+    pub(crate) fn emit_ffi_declarations(&self) -> String {
+        let mut out = String::new();
+        let _ = writeln!(out, "namespace {} {{\n", self.ffi_ns());
+        for def in self.ci.ffi_definitions() {
+            match def {
+                FfiDefinition::CallbackFunction(cb) => {
+                    let mut args: Vec<String> = cb
+                        .arguments()
+                        .iter()
+                        .map(|a| self.ffi_type_unqualified(&a.type_()))
+                        .collect();
+                    if cb.has_rust_call_status_arg() {
+                        args.push("uniffi::RustCallStatus*".into());
+                    }
+                    let ret = cb
+                        .return_type()
+                        .map_or_else(|| "void".to_owned(), |t| self.ffi_type_unqualified(t));
+                    let _ = writeln!(out, "typedef {ret} (*{})({});", cb.name(), args.join(", "));
+                }
+                FfiDefinition::Struct(st) => {
+                    let _ = writeln!(out, "struct {} {{", st.name());
+                    for field in st.fields() {
+                        let _ = writeln!(
+                            out,
+                            "    {} {};",
+                            self.ffi_type_unqualified(&field.type_()),
+                            escape(field.name())
+                        );
+                    }
+                    let _ = writeln!(out, "}};");
+                }
+                FfiDefinition::Function(f) => {
+                    let mut args: Vec<String> = f
+                        .arguments()
+                        .iter()
+                        .map(|a| format!("{} {}", self.ffi_type_unqualified(&a.type_()), escape(a.name())))
+                        .collect();
+                    if f.has_rust_call_status_arg() {
+                        args.push("uniffi::RustCallStatus* out_status".into());
+                    }
+                    let ret = f
+                        .return_type()
+                        .map_or_else(|| "void".to_owned(), |t| self.ffi_type_unqualified(t));
+                    let _ = writeln!(
+                        out,
+                        "extern \"C\" {ret} {}({});",
+                        f.name(),
+                        args.join(", ")
+                    );
+                }
+            }
+        }
+        let _ = writeln!(out, "\n}}  // namespace {}\n", self.ffi_ns());
+        out
+    }
+}

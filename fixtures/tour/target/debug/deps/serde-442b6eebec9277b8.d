@@ -1,0 +1,14 @@
+/Users/EBEMXC4/Projects/uniffi-bindgen-cpp/fixtures/tour/target/debug/deps/serde-442b6eebec9277b8.d: /Users/EBEMXC4/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/lib.rs /Users/EBEMXC4/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/integer128.rs /Users/EBEMXC4/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/mod.rs /Users/EBEMXC4/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/de.rs /Users/EBEMXC4/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/ser.rs /Users/EBEMXC4/Projects/uniffi-bindgen-cpp/fixtures/tour/target/debug/build/serde-bc9d12f76542e498/out/private.rs
+
+/Users/EBEMXC4/Projects/uniffi-bindgen-cpp/fixtures/tour/target/debug/deps/libserde-442b6eebec9277b8.rlib: /Users/EBEMXC4/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/lib.rs /Users/EBEMXC4/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/integer128.rs /Users/EBEMXC4/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/mod.rs /Users/EBEMXC4/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/de.rs /Users/EBEMXC4/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/ser.rs /Users/EBEMXC4/Projects/uniffi-bindgen-cpp/fixtures/tour/target/debug/build/serde-bc9d12f76542e498/out/private.rs
+
+/Users/EBEMXC4/Projects/uniffi-bindgen-cpp/fixtures/tour/target/debug/deps/libserde-442b6eebec9277b8.rmeta: /Users/EBEMXC4/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/lib.rs /Users/EBEMXC4/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/integer128.rs /Users/EBEMXC4/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/mod.rs /Users/EBEMXC4/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/de.rs /Users/EBEMXC4/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/ser.rs /Users/EBEMXC4/Projects/uniffi-bindgen-cpp/fixtures/tour/target/debug/build/serde-bc9d12f76542e498/out/private.rs
+
+/Users/EBEMXC4/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/lib.rs:
+/Users/EBEMXC4/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/integer128.rs:
+/Users/EBEMXC4/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/mod.rs:
+/Users/EBEMXC4/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/de.rs:
+/Users/EBEMXC4/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/ser.rs:
+/Users/EBEMXC4/Projects/uniffi-bindgen-cpp/fixtures/tour/target/debug/build/serde-bc9d12f76542e498/out/private.rs:
+
+# env-dep:OUT_DIR=/Users/EBEMXC4/Projects/uniffi-bindgen-cpp/fixtures/tour/target/debug/build/serde-bc9d12f76542e498/out

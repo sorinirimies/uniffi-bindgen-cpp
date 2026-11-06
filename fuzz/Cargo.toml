@@ -15,8 +15,8 @@ uniffi-bindgen-cpp = { path = "../crates/uniffi-bindgen-cpp" }
 [workspace]
 
 [[bin]]
-name = "parse_kv"
-path = "fuzz_targets/parse_kv.rs"
+name = "generate_udl"
+path = "fuzz_targets/generate_udl.rs"
 test = false
 doc = false
 bench = false
