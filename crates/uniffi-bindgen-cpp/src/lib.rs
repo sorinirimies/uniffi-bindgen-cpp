@@ -11,12 +11,12 @@
 //! Rust library into your program like any other native library.
 
 mod cli;
-mod config;
 mod codegen;
+mod config;
 
 pub use cli::run;
-pub use config::{Config, CustomTypeConfig};
 pub use codegen::{
     CppBindingGenerator, GeneratedFiles, RUNTIME_HEADER, RUNTIME_HEADER_NAME, generate_component,
     generate_from_udl, write_runtime,
 };
+pub use config::{Config, CustomTypeConfig};

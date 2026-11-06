@@ -633,7 +633,6 @@ dependencies = [
  "serde",
  "toml",
  "uniffi_bindgen",
- "uniffi_meta",
 ]
 
 [[package]]

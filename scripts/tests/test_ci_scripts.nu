@@ -232,3 +232,26 @@ def "test deps_update: a crate kept at two versions is no downgrade" [] {
 }
 
 def main [] { run-tests }
+
+use ../ci/cpp_e2e.nu [library_name compiler compile_args]
+
+def "test cpp_e2e: library file name per platform" [] {
+    assert equal (library_name "macos") "libtour.dylib"
+    assert equal (library_name "linux") "libtour.so"
+    assert equal (library_name "windows") "tour.dll"
+}
+
+def "test cpp_e2e: compiler choice" [] {
+    assert equal (compiler "" ["clang++" "g++"]) "clang++"
+    assert equal (compiler "icpx" ["g++"]) "icpx"
+    assert error { compiler "" [] }
+}
+
+def "test cpp_e2e: compile arguments" [] {
+    let args = (compile_args "/o" "/l" "/o/t" false)
+    assert ("-std=c++17" in $args)
+    assert ("-Werror" in $args)
+    assert ("/o/tour.cpp" in $args)
+    assert not ("-fsanitize=address,undefined" in $args)
+    assert ("-fsanitize=address,undefined" in (compile_args "/o" "/l" "/o/t" true))
+}

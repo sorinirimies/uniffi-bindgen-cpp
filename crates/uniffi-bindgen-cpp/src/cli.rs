@@ -91,13 +91,7 @@ fn generate(
         let out_dir = out_dir.context("--out-dir is required when generating from a library")?;
         let supplier = CrateConfigSupplier::from_cargo_metadata_command(metadata_no_deps)?;
         uniffi_bindgen::library_mode::generate_bindings(
-            source,
-            crate_name,
-            &generator,
-            &supplier,
-            config,
-            &out_dir,
-            format,
+            source, crate_name, &generator, &supplier, config, &out_dir, format,
         )?;
         return Ok(());
     }

@@ -91,7 +91,12 @@ impl Gen<'_> {
     }
 
     /// `RET Class::name(params)` for out-of-class definitions.
-    pub(crate) fn qualified_signature(&self, c: &dyn Callable, class_name: &str, name: &str) -> String {
+    pub(crate) fn qualified_signature(
+        &self,
+        c: &dyn Callable,
+        class_name: &str,
+        name: &str,
+    ) -> String {
         format!(
             "{} {class_name}::{name}({})",
             self.return_type_of(c),

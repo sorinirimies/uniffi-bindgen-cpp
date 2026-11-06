@@ -86,12 +86,22 @@ impl Gen<'_> {
             let _ = writeln!(
                 out,
                 "bool {name}::operator==(const {name}& other) const {{\n{}}}\n",
-                self.call_body(eq, handle, Some(vec!["other.uniffi_clone_handle()".into()]), 4)
+                self.call_body(
+                    eq,
+                    handle,
+                    Some(vec!["other.uniffi_clone_handle()".into()]),
+                    4
+                )
             );
         }
         if let Some(cmp) = &traits.ord_cmp {
             let body = self
-                .call_body(cmp, handle, Some(vec!["other.uniffi_clone_handle()".into()]), 4)
+                .call_body(
+                    cmp,
+                    handle,
+                    Some(vec!["other.uniffi_clone_handle()".into()]),
+                    4,
+                )
                 .replace("return result;", "return result < 0;");
             let _ = writeln!(
                 out,
@@ -107,7 +117,10 @@ impl Gen<'_> {
         let (free, clone) = self.free_and_clone(obj, &name, 4);
         let mut out = String::new();
         let _ = writeln!(out, "{name}::~{name}() {{\n{free}}}\n");
-        let _ = writeln!(out, "uint64_t {name}::uniffi_clone_handle() const {{\n{clone}}}\n");
+        let _ = writeln!(
+            out,
+            "uint64_t {name}::uniffi_clone_handle() const {{\n{clone}}}\n"
+        );
         for c in obj.constructors() {
             let _ = writeln!(
                 out,

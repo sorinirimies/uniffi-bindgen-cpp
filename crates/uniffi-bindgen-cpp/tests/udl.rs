@@ -91,7 +91,11 @@ fn header_declares_the_api() {
 #[test]
 fn trailing_defaults_only() {
     let h = generate().header;
-    assert!(h.contains("shape_of(const Point& p, double radius = 2.5);") || h.contains("double radius = static_cast<double>"), "{h}");
+    assert!(
+        h.contains("shape_of(const Point& p, double radius = 2.5);")
+            || h.contains("double radius = static_cast<double>"),
+        "{h}"
+    );
 }
 
 #[test]
@@ -151,10 +155,15 @@ fn generated_code_compiles() {
         eprintln!("no C++ compiler found, skipping");
         return;
     };
-    let dir = std::env::temp_dir().join(format!("uniffi-bindgen-cpp-compile-{}", std::process::id()));
+    let dir =
+        std::env::temp_dir().join(format!("uniffi-bindgen-cpp-compile-{}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("temp dir");
     let files = generate();
-    std::fs::write(dir.join("uniffi_runtime.hpp"), uniffi_bindgen_cpp::RUNTIME_HEADER).expect("write");
+    std::fs::write(
+        dir.join("uniffi_runtime.hpp"),
+        uniffi_bindgen_cpp::RUNTIME_HEADER,
+    )
+    .expect("write");
     std::fs::write(dir.join(&files.header_name), &files.header).expect("write");
     std::fs::write(dir.join(&files.source_name), &files.source).expect("write");
     let out = Command::new(compiler)
@@ -163,5 +172,9 @@ fn generated_code_compiles() {
         .output()
         .expect("run the compiler");
     let _ = std::fs::remove_dir_all(&dir);
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 }

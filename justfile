@@ -49,6 +49,10 @@ run *args:
 test:
     cargo test --workspace --all-features
 
+# Generate C++ for the tour fixture, compile it and run the C++ test (add --sanitize for ASan/UBSan)
+e2e *args:
+    nu scripts/ci/cpp_e2e.nu {{ args }}
+
 # Nushell script tests
 test-nu:
     nu scripts/tests/run_all.nu

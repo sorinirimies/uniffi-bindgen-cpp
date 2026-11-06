@@ -7,7 +7,8 @@ fn bin() -> Command {
 }
 
 fn temp_dir(name: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("uniffi-bindgen-cpp-{name}-{}", std::process::id()));
+    let dir =
+        std::env::temp_dir().join(format!("uniffi-bindgen-cpp-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("create temp dir");
     dir
@@ -34,7 +35,11 @@ fn unknown_argument_is_a_usage_error() {
 fn runtime_subcommand_writes_the_header() {
     let dir = temp_dir("runtime");
     let out = bin().arg("runtime").arg(&dir).output().expect("run");
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let header = std::fs::read_to_string(dir.join("uniffi_runtime.hpp")).expect("header written");
     assert_eq!(header, uniffi_bindgen_cpp::RUNTIME_HEADER);
     let _ = std::fs::remove_dir_all(dir);

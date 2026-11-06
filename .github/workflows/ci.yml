@@ -38,6 +38,27 @@ jobs:
       - name: Quality gate
         run: nu scripts/ci/quality_gate.nu
 
+  # Generates C++ for a real UniFFI crate, compiles it and runs a C++ test
+  # (async, callbacks, errors, objects), with and without sanitizers.
+  cpp:
+    name: C++ end-to-end (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: hustcer/setup-nu@v3
+        with:
+          version: "0.116.1"
+      - name: C++ end-to-end test
+        run: nu scripts/ci/cpp_e2e.nu
+      - name: C++ end-to-end test with sanitizers
+        run: nu scripts/ci/cpp_e2e.nu --sanitize
+
   # The binary ships for all three systems: paths, line endings and process
   # handling differ there.
   test:

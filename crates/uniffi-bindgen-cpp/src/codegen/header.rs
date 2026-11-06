@@ -217,7 +217,11 @@ impl Gen<'_> {
             let _ = writeln!(out, "    }};");
         }
         let alternatives: Vec<String> = e.variants().iter().map(|v| class(v.name())).collect();
-        let _ = writeln!(out, "\n    using Variant = std::variant<{}>;", alternatives.join(", "));
+        let _ = writeln!(
+            out,
+            "\n    using Variant = std::variant<{}>;",
+            alternatives.join(", ")
+        );
         let _ = writeln!(out, "    Variant variant;\n");
         let _ = writeln!(out, "    {name}() = default;");
         let _ = writeln!(
@@ -243,7 +247,12 @@ impl Gen<'_> {
                 .and_then(|d| self.default_value(d, &ty))
                 .map(|d| format!(" = {d}"))
                 .unwrap_or_default();
-            let _ = writeln!(out, "    {} {}{default};", self.cpp_type(&ty), var(f.name()));
+            let _ = writeln!(
+                out,
+                "    {} {}{default};",
+                self.cpp_type(&ty),
+                var(f.name())
+            );
         }
         let _ = writeln!(out, "}};\n");
         out
@@ -289,7 +298,10 @@ impl Gen<'_> {
             if ctor_params.is_empty() {
                 let _ = writeln!(out, "    {vname}() : {ctor_init} {{}}");
             } else if flat {
-                let _ = writeln!(out, "    explicit {vname}({ctor_params}) : {ctor_init} {{}}");
+                let _ = writeln!(
+                    out,
+                    "    explicit {vname}({ctor_params}) : {ctor_init} {{}}"
+                );
             } else {
                 let _ = writeln!(out, "    {vname}({ctor_params}) : {ctor_init} {{}}");
             }
@@ -347,7 +359,10 @@ impl Gen<'_> {
     fn emit_callback_interface_class(&self, cb: &CallbackInterface) -> String {
         let name = class(cb.name());
         let mut out = doc(cb.docstring(), 0);
-        let _ = writeln!(out, "class {name} {{\npublic:\n    virtual ~{name}() = default;");
+        let _ = writeln!(
+            out,
+            "class {name} {{\npublic:\n    virtual ~{name}() = default;"
+        );
         for m in cb.methods() {
             out.push_str(&doc(m.docstring(), 4));
             let _ = writeln!(
@@ -366,7 +381,10 @@ impl Gen<'_> {
         let abstract_class = obj.is_trait_interface() || obj.has_callback_interface();
         let traits = obj.uniffi_trait_methods();
         if abstract_class {
-            let _ = writeln!(out, "class {name} {{\npublic:\n    virtual ~{name}() = default;");
+            let _ = writeln!(
+                out,
+                "class {name} {{\npublic:\n    virtual ~{name}() = default;"
+            );
             for m in obj.methods() {
                 out.push_str(&doc(m.docstring(), 4));
                 let _ = writeln!(
@@ -391,7 +409,11 @@ impl Gen<'_> {
             }
             for m in obj.methods() {
                 out.push_str(&doc(m.docstring(), 4));
-                let _ = writeln!(out, "    {} const;", self.signature(m, &var(m.name()), true));
+                let _ = writeln!(
+                    out,
+                    "    {} const;",
+                    self.signature(m, &var(m.name()), true)
+                );
             }
             let _ = writeln!(
                 out,
@@ -419,19 +441,29 @@ impl Gen<'_> {
             let _ = writeln!(out, "    {text}");
         };
         if traits.display_fmt.is_some() {
-            line(format!("/// The Rust `Display` implementation.\n    {virt}std::string to_string() const{tail};"));
+            line(format!(
+                "/// The Rust `Display` implementation.\n    {virt}std::string to_string() const{tail};"
+            ));
         }
         if traits.debug_fmt.is_some() {
-            line(format!("/// The Rust `Debug` implementation.\n    {virt}std::string debug_string() const{tail};"));
+            line(format!(
+                "/// The Rust `Debug` implementation.\n    {virt}std::string debug_string() const{tail};"
+            ));
         }
         if traits.hash_hash.is_some() {
-            line(format!("/// The Rust `Hash` implementation.\n    {virt}uint64_t hash() const{tail};"));
+            line(format!(
+                "/// The Rust `Hash` implementation.\n    {virt}uint64_t hash() const{tail};"
+            ));
         }
         if traits.eq_eq.is_some() {
-            line(format!("/// The Rust `Eq` implementation.\n    bool operator==(const {name}& other) const;\n    bool operator!=(const {name}& other) const {{ return !(*this == other); }}"));
+            line(format!(
+                "/// The Rust `Eq` implementation.\n    bool operator==(const {name}& other) const;\n    bool operator!=(const {name}& other) const {{ return !(*this == other); }}"
+            ));
         }
         if traits.ord_cmp.is_some() {
-            line(format!("/// The Rust `Ord` implementation.\n    bool operator<(const {name}& other) const;"));
+            line(format!(
+                "/// The Rust `Ord` implementation.\n    bool operator<(const {name}& other) const;"
+            ));
         }
         out
     }
@@ -473,7 +505,11 @@ impl Gen<'_> {
         let value_defs = self.ordered_value_defs();
         // Declare first so that the definitions can refer to each other freely.
         for def in &value_defs {
-            let _ = writeln!(out, "template <>\nstruct Codec<{}>;", self.outside_name(def.name()));
+            let _ = writeln!(
+                out,
+                "template <>\nstruct Codec<{}>;",
+                self.outside_name(def.name())
+            );
         }
         for o in self.ci.object_definitions() {
             let _ = writeln!(
@@ -563,7 +599,9 @@ impl Gen<'_> {
             let mut writes = String::new();
             for (j, f) in v.fields().iter().enumerate() {
                 let ty = self.cpp_type_outside(&f.as_type());
-                body.push_str(&format!("                auto f{j} = Codec<{ty}>::read(reader);\n"));
+                body.push_str(&format!(
+                    "                auto f{j} = Codec<{ty}>::read(reader);\n"
+                ));
                 args.push(format!("std::move(f{j})"));
                 writes.push_str(&format!(
                     "                Codec<{ty}>::write(writer, variant.{});\n",
@@ -601,7 +639,9 @@ impl Gen<'_> {
                 let mut args = Vec::new();
                 for (j, f) in v.fields().iter().enumerate() {
                     let ty = self.cpp_type_outside(&f.as_type());
-                    body.push_str(&format!("                auto f{j} = Codec<{ty}>::read(reader);\n"));
+                    body.push_str(&format!(
+                        "                auto f{j} = Codec<{ty}>::read(reader);\n"
+                    ));
                     args.push(format!("std::move(f{j})"));
                 }
                 cases.push_str(&format!(

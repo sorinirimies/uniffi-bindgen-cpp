@@ -57,13 +57,22 @@ impl Gen<'_> {
             .join(", ")
     }
 
-    fn sync_wrapper(&self, name: &str, i: usize, callback: &FfiCallbackFunction, m: &Method) -> String {
+    fn sync_wrapper(
+        &self,
+        name: &str,
+        i: usize,
+        callback: &FfiCallbackFunction,
+        m: &Method,
+    ) -> String {
         let args = self.lifted_args(m);
         let method = var(m.name());
         let (call, write) = match m.return_type() {
             Some(t) => (
                 format!("auto result = object->{method}({args});"),
-                format!("\n        *uniffi_out_return = {};", self.lower(t, "result")),
+                format!(
+                    "\n        *uniffi_out_return = {};",
+                    self.lower(t, "result")
+                ),
             ),
             None => (
                 format!("object->{method}({args});"),
@@ -77,7 +86,13 @@ impl Gen<'_> {
         )
     }
 
-    fn async_wrapper(&self, name: &str, i: usize, callback: &FfiCallbackFunction, m: &Method) -> String {
+    fn async_wrapper(
+        &self,
+        name: &str,
+        i: usize,
+        callback: &FfiCallbackFunction,
+        m: &Method,
+    ) -> String {
         let args = self.lifted_args(m);
         let method = var(m.name());
         let result_struct = m.foreign_future_ffi_result_struct().name().to_owned();
@@ -87,7 +102,10 @@ impl Gen<'_> {
         let (get, store) = match m.return_type() {
             Some(t) => (
                 "auto value = pending->get();".to_owned(),
-                format!("\n            result.return_value = {};", self.lower(t, "value")),
+                format!(
+                    "\n            result.return_value = {};",
+                    self.lower(t, "value")
+                ),
             ),
             None => ("pending->get();".to_owned(), String::new()),
         };

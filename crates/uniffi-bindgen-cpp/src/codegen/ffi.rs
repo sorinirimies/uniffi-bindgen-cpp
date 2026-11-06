@@ -50,7 +50,13 @@ impl Gen<'_> {
                     let mut args: Vec<String> = f
                         .arguments()
                         .iter()
-                        .map(|a| format!("{} {}", self.ffi_type_unqualified(&a.type_()), escape(a.name())))
+                        .map(|a| {
+                            format!(
+                                "{} {}",
+                                self.ffi_type_unqualified(&a.type_()),
+                                escape(a.name())
+                            )
+                        })
                         .collect();
                     if f.has_rust_call_status_arg() {
                         args.push("uniffi::RustCallStatus* out_status".into());
@@ -58,12 +64,7 @@ impl Gen<'_> {
                     let ret = f
                         .return_type()
                         .map_or_else(|| "void".to_owned(), |t| self.ffi_type_unqualified(t));
-                    let _ = writeln!(
-                        out,
-                        "extern \"C\" {ret} {}({});",
-                        f.name(),
-                        args.join(", ")
-                    );
+                    let _ = writeln!(out, "extern \"C\" {ret} {}({});", f.name(), args.join(", "));
                 }
             }
         }

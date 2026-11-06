@@ -27,7 +27,6 @@ clap = { workspace = true }
 serde = { workspace = true }
 toml = { workspace = true }
 uniffi_bindgen = { workspace = true }
-uniffi_meta = { workspace = true }
 
 [package.metadata.docs.rs]
 all-features = true

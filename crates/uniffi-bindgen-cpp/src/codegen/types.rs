@@ -93,7 +93,10 @@ impl<'a> Gen<'a> {
             Type::Record { name, .. } | Type::Enum { name, .. } => self.named_in(t, name, outside),
             Type::Optional { inner_type } => format!("std::optional<{}>", rec(inner_type)),
             Type::Sequence { inner_type } => format!("std::vector<{}>", rec(inner_type)),
-            Type::Map { key_type, value_type } => {
+            Type::Map {
+                key_type,
+                value_type,
+            } => {
                 format!("std::map<{}, {}>", rec(key_type), rec(value_type))
             }
             Type::Custom { name, .. } => {
@@ -187,10 +190,16 @@ impl<'a> Gen<'a> {
             | Type::Float64 => expr.to_owned(),
             Type::String => format!("uniffi_detail::lower_string({expr})"),
             Type::Object { name, .. } | Type::CallbackInterface { name, .. } => {
-                format!("{}uniffi_detail::lower_{}({expr})", self.qualifier(t), class(name))
+                format!(
+                    "{}uniffi_detail::lower_{}({expr})",
+                    self.qualifier(t),
+                    class(name)
+                )
             }
             Type::Custom { name, builtin, .. } => {
-                let inner = self.custom_config(name).map_or_else(|| expr.to_owned(), |c| c.lower(expr));
+                let inner = self
+                    .custom_config(name)
+                    .map_or_else(|| expr.to_owned(), |c| c.lower(expr));
                 self.lower(builtin, &inner)
             }
             _ => format!("uniffi_detail::lower_buf<{}>({expr})", self.cpp_type(t)),
@@ -213,11 +222,16 @@ impl<'a> Gen<'a> {
             | Type::Float64 => expr.to_owned(),
             Type::String => format!("uniffi_detail::lift_string({expr})"),
             Type::Object { name, .. } | Type::CallbackInterface { name, .. } => {
-                format!("{}uniffi_detail::lift_{}({expr})", self.qualifier(t), class(name))
+                format!(
+                    "{}uniffi_detail::lift_{}({expr})",
+                    self.qualifier(t),
+                    class(name)
+                )
             }
             Type::Custom { name, builtin, .. } => {
                 let inner = self.lift(builtin, expr);
-                self.custom_config(name).map_or(inner.clone(), |c| c.lift(&inner))
+                self.custom_config(name)
+                    .map_or(inner.clone(), |c| c.lift(&inner))
             }
             _ => format!("uniffi_detail::lift_buf<{}>({expr})", self.cpp_type(t)),
         }
