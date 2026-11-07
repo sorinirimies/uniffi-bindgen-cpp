@@ -120,13 +120,6 @@ lower = "{}"                # C++ value -> builtin value
 * Per-component namespace overrides for types that come from another crate (the other
   component's UniFFI namespace is used).
 
-## Other C++ generators
-
-[NordSecurity/uniffi-bindgen-cpp](https://github.com/NordSecurity/uniffi-bindgen-cpp) is an
-older project with the same goal. It requires C++20, does not support async functions, and
-can also generate C++ scaffolding. This project targets C++17, supports `async`, and is
-tested end to end against real UniFFI crates (`fixtures/tour`, stem-mqtt).
-
 ## Development
 
 ```sh
