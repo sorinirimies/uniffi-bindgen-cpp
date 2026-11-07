@@ -80,6 +80,15 @@ impl Gen<'_> {
                 );
             }
         }
+        for obj in self.ci.object_definitions() {
+            if self.is_error_object(obj.name()) {
+                let name = class(obj.name());
+                let _ = writeln!(
+                    out,
+                    "[[noreturn]] void throw_buf_{name}(uniffi::RustBuffer buffer) {{\n    BufferGuard guard{{buffer}};\n    uniffi::Reader reader(buffer.data, static_cast<size_t>(buffer.len));\n    throw ::{ns}::{name}(uniffi::HandleTag{{}}, reader.read_int<uint64_t>());\n}}\n"
+                );
+            }
+        }
         let _ = writeln!(out, "}}  // namespace uniffi_detail\n");
 
         for obj in self.ci.object_definitions() {
@@ -87,6 +96,7 @@ impl Gen<'_> {
                 out.push_str(&self.emit_object_methods(obj));
             }
         }
+        out.push_str(&self.value_member_definitions());
         for func in self.ci.function_definitions() {
             let _ = writeln!(
                 out,

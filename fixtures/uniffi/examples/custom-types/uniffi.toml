@@ -59,3 +59,10 @@ imports = ["urllib.parse"]
 lift = "urllib.parse.urlparse({})"
 # and to lower it to a Rust string
 lower = "urllib.parse.urlunparse({})"
+
+# Added for uniffi-bindgen-cpp: exercises custom type mappings.
+[bindings.cpp.custom_types.TimeIntervalMs]
+type_name = "std::chrono::system_clock::time_point"
+includes = ["<chrono>"]
+lift = "std::chrono::system_clock::time_point(std::chrono::milliseconds({}))"
+lower = "std::chrono::duration_cast<std::chrono::milliseconds>({}.time_since_epoch()).count()"

@@ -8,6 +8,7 @@ mod names;
 mod objects;
 mod source;
 mod types;
+mod values;
 
 use anyhow::{Context, Result};
 use camino::Utf8Path;

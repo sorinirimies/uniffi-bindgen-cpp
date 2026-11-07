@@ -90,7 +90,7 @@ impl Gen<'_> {
     /// `, &throw_buf_Err` for callables that throw an error enum.
     fn thrower(&self, c: &dyn Callable) -> String {
         match c.throws_type() {
-            Some(t @ Type::Enum { name, .. }) => format!(
+            Some(t @ (Type::Enum { name, .. } | Type::Object { name, .. })) => format!(
                 ", &{}uniffi_detail::throw_buf_{}",
                 self.qualifier(t),
                 class(name)

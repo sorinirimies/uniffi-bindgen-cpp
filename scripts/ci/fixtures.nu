@@ -78,8 +78,8 @@ def main [--sanitize, --only: string = ""] {
     cd $root
     let manifest = ($FIXTURES | path join Cargo.toml)
     print -e "▶ building the fixtures"
-    ^cargo build --manifest-path $manifest
-    ^cargo build -p uniffi-bindgen-cpp
+    ^cargo build --quiet --manifest-path $manifest
+    ^cargo build --quiet -p uniffi-bindgen-cpp
     let bin = ($root | path join target debug uniffi-bindgen-cpp)
     let lib_dir = ($root | path join $FIXTURES target debug)
     let libs = (selected (cdylibs (^cargo metadata --format-version 1 --no-deps --manifest-path $manifest | from json)) $only)

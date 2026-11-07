@@ -133,7 +133,15 @@ impl<'a> Gen<'a> {
     }
 
     pub(crate) fn is_error_enum(&self, name: &str) -> bool {
-        self.ci.is_name_used_as_error(name)
+        self.ci.get_enum_definition(name).is_some() && self.ci.is_name_used_as_error(name)
+    }
+
+    /// An object that Rust functions return as their error.
+    pub(crate) fn is_error_object(&self, name: &str) -> bool {
+        self.ci.get_object_definition(name).is_some_and(|o| {
+            !(o.is_trait_interface() || o.has_callback_interface())
+                && self.ci.is_name_used_as_error(name)
+        })
     }
 
     /// The C++ spelling of an FFI-level type, for code outside the FFI namespace.

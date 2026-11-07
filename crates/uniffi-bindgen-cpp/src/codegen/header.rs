@@ -9,6 +9,7 @@ use uniffi_bindgen::interface::{
 
 use super::names::{class, doc, field, member, var};
 use super::types::Gen;
+use super::values::{ValueKind, trait_declarations};
 
 /// A codec specialization: the class, and its member definitions, which have to come
 /// after every codec is declared.
@@ -156,9 +157,11 @@ impl Gen<'_> {
             let _ = writeln!(out, "{};\n", self.signature(func, &var(func.name()), true));
         }
 
+        out.push_str(&self.value_inline_definitions());
         out.push_str(&self.emit_detail_declarations());
         let _ = writeln!(out, "}}  // namespace {ns}\n");
         out.push_str(&self.emit_codecs());
+        out.push_str(&self.value_std_hash());
         out
     }
 
@@ -247,11 +250,16 @@ impl Gen<'_> {
             let _ = writeln!(out, "    {} = {discr},", class(v.name()));
         }
         let _ = writeln!(out, "}};\n");
+        if let Some(v) = self.value_type(e.name()) {
+            out.push_str(&self.flat_enum_function_declarations(&v));
+        }
         out
     }
 
     fn emit_data_enum(&self, e: &Enum) -> String {
         let name = class(e.name());
+        let value = self.value_type(e.name());
+        let fieldwise_eq = value.as_ref().is_some_and(|v| v.traits.eq_eq.is_none());
         let mut out = doc(e.docstring(), 0);
         let _ = writeln!(out, "struct {name} {{");
         for v in e.variants() {
@@ -265,6 +273,12 @@ impl Gen<'_> {
                     "        {} {};",
                     self.cpp_type(&f.as_type()),
                     member(&field(f.name(), i), &vname)
+                );
+            }
+            if fieldwise_eq {
+                let _ = writeln!(
+                    out,
+                    "        bool operator==(const {vname}& other) const;\n        bool operator!=(const {vname}& other) const {{ return !(*this == other); }}"
                 );
             }
             let _ = writeln!(out, "    }};");
@@ -289,6 +303,9 @@ impl Gen<'_> {
             out,
             "    /// True if this value holds the variant `V`.\n    template <class V>\n    bool is() const {{ return std::holds_alternative<V>(variant); }}\n\n    /// The variant `V`, or null if this value holds another one.\n    template <class V>\n    const V* get_if() const {{ return std::get_if<V>(&variant); }}\n\n    /// Call `visitor` with the held variant.\n    template <class F>\n    decltype(auto) visit(F&& visitor) const {{ return std::visit(std::forward<F>(visitor), variant); }}"
         );
+        if let Some(v) = &value {
+            out.push_str(&self.value_member_declarations(v));
+        }
         let _ = writeln!(out, "}};\n");
         out
     }
@@ -311,6 +328,9 @@ impl Gen<'_> {
                 member(f.name(), r.name())
             );
         }
+        if let Some(v) = self.value_type(r.name()) {
+            out.push_str(&self.value_member_declarations(&v));
+        }
         let _ = writeln!(out, "}};\n");
         out
     }
@@ -318,10 +338,15 @@ impl Gen<'_> {
     fn emit_error_class(&self, e: &Enum) -> String {
         let name = class(e.name());
         let flat = e.is_flat();
+        let members = self
+            .value_type(e.name())
+            .filter(|v| v.kind == ValueKind::Error)
+            .map(|v| self.value_member_declarations(&v))
+            .unwrap_or_default();
         let mut out = doc(e.docstring(), 0);
         let _ = writeln!(
             out,
-            "class {name} : public uniffi::Exception {{\npublic:\n    ~{name}() override = default;\n    virtual int32_t uniffi_variant_index() const = 0;\n    virtual void uniffi_write_fields(uniffi::Writer& writer) const = 0;\n    /// Throws this error as its most derived type.\n    [[noreturn]] virtual void uniffi_throw() const = 0;\n\nprotected:\n    explicit {name}(const std::string& what) : uniffi::Exception(what) {{}}\n}};\n"
+            "class {name} : public uniffi::Exception {{\npublic:\n    ~{name}() override = default;\n    virtual int32_t uniffi_variant_index() const = 0;\n    virtual void uniffi_write_fields(uniffi::Writer& writer) const = 0;\n    /// Throws this error as its most derived type.\n    [[noreturn]] virtual void uniffi_throw() const = 0;\n{members}\nprotected:\n    explicit {name}(const std::string& what) : uniffi::Exception(what) {{}}\n}};\n"
         );
         for (i, v) in e.variants().iter().enumerate() {
             let vname = format!("{name}_{}", class(v.name()));
@@ -444,78 +469,64 @@ impl Gen<'_> {
                     self.signature(m, &member(m.name(), obj.name()), false)
                 );
             }
+        } else if self.is_error_object(obj.name()) {
+            // Thrown as an exception, so it must be copyable: a copy is a new reference.
+            let what = if traits.display_fmt.is_some() {
+                "\n    /// The Rust `Display` text.\n    const char* what() const noexcept override;\n"
+            } else {
+                ""
+            };
+            let _ = writeln!(
+                out,
+                "class {name} : public uniffi::Exception {{\npublic:\n    /// Wraps a handle owned by Rust. Not meant to be called directly.\n    {name}(uniffi::HandleTag, uint64_t handle) : uniffi::Exception(\"{name}\"), handle_(handle) {{}}\n    ~{name}() override;\n    {name}(const {name}& other) : uniffi::Exception(other), handle_(other.uniffi_clone_handle()) {{}}\n    {name}& operator=(const {name}&) = delete;\n{what}"
+            );
+            out.push_str(&self.object_members(obj));
         } else {
             let _ = writeln!(out, "class {name} {{\npublic:");
             let _ = writeln!(
                 out,
                 "    /// Wraps a handle owned by Rust. Not meant to be called directly.\n    {name}(uniffi::HandleTag, uint64_t handle) : handle_(handle) {{}}\n    ~{name}();\n    {name}(const {name}&) = delete;\n    {name}& operator=(const {name}&) = delete;\n"
             );
-            for c in obj.constructors() {
-                out.push_str(&doc(c.docstring(), 4));
-                let _ = writeln!(
-                    out,
-                    "    static {};",
-                    self.signature(c, &member(c.name(), obj.name()), true)
-                );
-            }
-            for m in obj.methods() {
-                out.push_str(&doc(m.docstring(), 4));
-                let _ = writeln!(
-                    out,
-                    "    {} const;",
-                    self.signature(m, &member(m.name(), obj.name()), true)
-                );
-            }
-            let _ = writeln!(
-                out,
-                "\n    /// A new reference to the Rust object, for passing to Rust.\n    uint64_t uniffi_clone_handle() const;"
-            );
+            out.push_str(&self.object_members(obj));
         }
         if !abstract_class {
-            out.push_str(&self.emit_trait_declarations(&name, &traits));
+            out.push_str(&trait_declarations(&name, &traits));
         }
         if !abstract_class {
-            let _ = writeln!(out, "\nprivate:\n    uint64_t handle_;");
+            let what_cache = if self.is_error_object(obj.name()) && traits.display_fmt.is_some() {
+                "\n    mutable std::string what_;"
+            } else {
+                ""
+            };
+            let _ = writeln!(out, "\nprivate:\n    uint64_t handle_;{what_cache}");
         }
         let _ = writeln!(out, "}};\n");
         out
     }
 
-    fn emit_trait_declarations(
-        &self,
-        name: &str,
-        traits: &uniffi_bindgen::interface::UniffiTraitMethods,
-    ) -> String {
+    /// Constructors, methods and `uniffi_clone_handle` of a Rust-backed object.
+    fn object_members(&self, obj: &Object) -> String {
         let mut out = String::new();
-        let (virt, tail) = ("", "");
-        let mut line = |text: String| {
-            let _ = writeln!(out, "    {text}");
-        };
-        if traits.display_fmt.is_some() {
-            line(format!(
-                "/// The Rust `Display` implementation.\n    {virt}std::string to_string() const{tail};"
-            ));
+        for c in obj.constructors() {
+            out.push_str(&doc(c.docstring(), 4));
+            let _ = writeln!(
+                out,
+                "    static {};",
+                self.signature(c, &member(c.name(), obj.name()), true)
+            );
         }
-        if traits.debug_fmt.is_some() {
-            line(format!(
-                "/// The Rust `Debug` implementation.\n    {virt}std::string debug_string() const{tail};"
-            ));
+        for m in obj.methods() {
+            out.push_str(&doc(m.docstring(), 4));
+            let _ = writeln!(
+                out,
+                "    {} const;",
+                self.signature(m, &member(m.name(), obj.name()), true)
+            );
         }
-        if traits.hash_hash.is_some() {
-            line(format!(
-                "/// The Rust `Hash` implementation.\n    {virt}uint64_t hash() const{tail};"
-            ));
-        }
-        if traits.eq_eq.is_some() {
-            line(format!(
-                "/// The Rust `Eq` implementation.\n    bool operator==(const {name}& other) const;\n    bool operator!=(const {name}& other) const {{ return !(*this == other); }}"
-            ));
-        }
-        if traits.ord_cmp.is_some() {
-            line(format!(
-                "/// The Rust `Ord` implementation.\n    bool operator<(const {name}& other) const;"
-            ));
-        }
+        let _ = writeln!(
+            out,
+            "\n    /// A new reference to the Rust object, for passing to Rust.\n    uint64_t uniffi_clone_handle() const;"
+        );
         out
     }
 
@@ -537,14 +548,25 @@ impl Gen<'_> {
                 "std::shared_ptr<{name}> lift_{name}(uint64_t handle);\nuint64_t lower_{name}(const std::shared_ptr<{name}>& value);"
             );
         }
-        for e in self.ci.enum_definitions() {
-            if self.is_error_enum(e.name()) {
-                let _ = writeln!(
-                    out,
-                    "[[noreturn]] void throw_buf_{}(uniffi::RustBuffer buffer);",
-                    class(e.name())
-                );
-            }
+        let errors = self
+            .ci
+            .enum_definitions()
+            .iter()
+            .map(|e| e.name())
+            .filter(|n| self.is_error_enum(n))
+            .chain(
+                self.ci
+                    .object_definitions()
+                    .iter()
+                    .map(|o| o.name())
+                    .filter(|n| self.is_error_object(n)),
+            );
+        for name in errors {
+            let _ = writeln!(
+                out,
+                "[[noreturn]] void throw_buf_{}(uniffi::RustBuffer buffer);",
+                class(name)
+            );
         }
         let _ = writeln!(out, "}}  // namespace uniffi_detail\n");
         out
@@ -587,8 +609,8 @@ impl Gen<'_> {
             out.push_str(&codec.declaration);
             definitions.push_str(&codec.definition);
         }
-        out.push_str(&definitions);
         out.push_str(&self.codec_custom());
+        out.push_str(&definitions);
         let _ = writeln!(out, "}}  // namespace uniffi\n");
         out.push_str(&self.emit_error_field_writers());
         out

@@ -56,61 +56,6 @@ impl Gen<'_> {
         (free, clone)
     }
 
-    /// The members that give an object access to its uniffi traits.
-    fn trait_methods(&self, obj: &Object, name: &str) -> String {
-        let traits = obj.uniffi_trait_methods();
-        let handle = Some("uniffi_clone_handle()");
-        let mut out = String::new();
-        if let Some(fmt) = &traits.display_fmt {
-            let _ = writeln!(
-                out,
-                "std::string {name}::to_string() const {{\n{}}}\n",
-                self.call_body(fmt, handle, None, 4)
-            );
-        }
-        if let Some(fmt) = &traits.debug_fmt {
-            let _ = writeln!(
-                out,
-                "std::string {name}::debug_string() const {{\n{}}}\n",
-                self.call_body(fmt, handle, None, 4)
-            );
-        }
-        if let Some(hash) = &traits.hash_hash {
-            let _ = writeln!(
-                out,
-                "uint64_t {name}::hash() const {{\n{}}}\n",
-                self.call_body(hash, handle, None, 4)
-            );
-        }
-        if let Some(eq) = &traits.eq_eq {
-            let _ = writeln!(
-                out,
-                "bool {name}::operator==(const {name}& other) const {{\n{}}}\n",
-                self.call_body(
-                    eq,
-                    handle,
-                    Some(vec!["other.uniffi_clone_handle()".into()]),
-                    4
-                )
-            );
-        }
-        if let Some(cmp) = &traits.ord_cmp {
-            let body = self
-                .call_body(
-                    cmp,
-                    handle,
-                    Some(vec!["other.uniffi_clone_handle()".into()]),
-                    4,
-                )
-                .replace("return uniffi_result;", "return uniffi_result < 0;");
-            let _ = writeln!(
-                out,
-                "bool {name}::operator<(const {name}& other) const {{\n{body}}}\n"
-            );
-        }
-        out
-    }
-
     /// Out-of-class definitions for an object backed by a Rust struct.
     pub(crate) fn emit_object_methods(&self, obj: &Object) -> String {
         let name = class(obj.name());
@@ -137,7 +82,18 @@ impl Gen<'_> {
                 self.call_body(m, Some("uniffi_clone_handle()"), None, 4)
             );
         }
-        out.push_str(&self.trait_methods(obj, &name));
+        if self.is_error_object(obj.name()) && obj.uniffi_trait_methods().display_fmt.is_some() {
+            let _ = writeln!(
+                out,
+                "const char* {name}::what() const noexcept {{\n    if (what_.empty()) {{\n        try {{\n            what_ = to_string();\n        }} catch (...) {{\n            what_ = \"{name}\";\n        }}\n    }}\n    return what_.c_str();\n}}\n"
+            );
+        }
+        out.push_str(&self.trait_definitions(
+            &name,
+            &obj.uniffi_trait_methods(),
+            "uniffi_clone_handle()",
+            "other.uniffi_clone_handle()",
+        ));
         out
     }
 

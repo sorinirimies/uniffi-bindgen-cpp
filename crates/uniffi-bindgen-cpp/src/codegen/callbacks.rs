@@ -12,12 +12,22 @@ impl Gen<'_> {
     /// The `catch` clauses that turn a C++ exception into a call status.
     fn catch_clauses(&self, m: &Method, status: &str, pad: &str) -> String {
         let mut out = String::new();
-        if let Some(t @ Type::Enum { name, .. }) = m.throws_type() {
-            let err = self.named(t, name);
-            let _ = writeln!(
-                out,
-                "{pad}}} catch (const {err}& error) {{\n{pad}    {status}.code = uniffi::CALL_ERROR;\n{pad}    {status}.error_buf = uniffi_detail::lower_error(error);"
-            );
+        match m.throws_type() {
+            Some(t @ Type::Enum { name, .. }) => {
+                let err = self.named(t, name);
+                let _ = writeln!(
+                    out,
+                    "{pad}}} catch (const {err}& error) {{\n{pad}    {status}.code = uniffi::CALL_ERROR;\n{pad}    {status}.error_buf = uniffi_detail::lower_error(error);"
+                );
+            }
+            Some(t @ Type::Object { name, .. }) => {
+                let err = self.named(t, name);
+                let _ = writeln!(
+                    out,
+                    "{pad}}} catch (const {err}& error) {{\n{pad}    {status}.code = uniffi::CALL_ERROR;\n{pad}    {status}.error_buf = uniffi_detail::lower_buf<std::shared_ptr<{err}>>(std::make_shared<{err}>(error));"
+                );
+            }
+            _ => {}
         }
         let _ = writeln!(
             out,
