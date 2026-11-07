@@ -119,7 +119,7 @@ struct BufferGuard {
     }
 };
 
-uniffi::RustBuffer buffer_from_bytes(const uint8_t* data, size_t len) {
+[[maybe_unused]] uniffi::RustBuffer buffer_from_bytes(const uint8_t* data, size_t len) {
     uniffi::ForeignBytes bytes{static_cast<int32_t>(len), data};
     uniffi::RustCallStatus status{};
     uniffi::RustBuffer buffer = ffi::@from_bytes@(bytes, &status);
@@ -131,7 +131,7 @@ uniffi::RustBuffer buffer_from_bytes(const uint8_t* data, size_t len) {
 
 using Thrower = void (*)(uniffi::RustBuffer);
 
-void check_status(uniffi::RustCallStatus& status, Thrower thrower = nullptr) {
+[[maybe_unused]] void check_status(uniffi::RustCallStatus& status, Thrower thrower = nullptr) {
     switch (status.code) {
         case uniffi::CALL_SUCCESS:
             return;

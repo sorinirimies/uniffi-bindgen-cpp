@@ -53,9 +53,13 @@ enum Command {
     },
 }
 
-/// Parse the arguments and run.
+/// Parses the process arguments and runs the command.
 pub fn run() -> Result<()> {
-    match Cli::parse().command {
+    execute(Cli::parse())
+}
+
+fn execute(cli: Cli) -> Result<()> {
+    match cli.command {
         Command::Generate {
             source,
             out_dir,
@@ -107,4 +111,63 @@ fn generate(
         crate_name.as_deref(),
         format,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(args: &[&str]) -> Result<Cli, clap::Error> {
+        Cli::try_parse_from(std::iter::once("uniffi-bindgen-cpp").chain(args.iter().copied()))
+    }
+
+    #[test]
+    fn generate_parses_every_option() {
+        let cli = parse(&[
+            "generate",
+            "libx.so",
+            "--out-dir",
+            "out",
+            "--config",
+            "u.toml",
+            "--crate",
+            "x",
+            "--no-format",
+            "--metadata-no-deps",
+        ])
+        .unwrap();
+        let Command::Generate {
+            source,
+            out_dir,
+            config,
+            crate_name,
+            library,
+            no_format,
+            metadata_no_deps,
+        } = cli.command
+        else {
+            panic!("expected generate");
+        };
+        assert_eq!(source, "libx.so");
+        assert_eq!(out_dir.as_deref(), Some("out".into()));
+        assert_eq!(config.as_deref(), Some("u.toml".into()));
+        assert_eq!(crate_name.as_deref(), Some("x"));
+        assert_eq!(library, None);
+        assert!(no_format && metadata_no_deps);
+    }
+
+    #[test]
+    fn generate_without_source_is_a_usage_error() {
+        assert!(parse(&["generate"]).is_err());
+    }
+
+    #[test]
+    fn generate_from_library_without_out_dir_is_an_error() {
+        let cli = parse(&["generate", "libmissing.so"]).unwrap();
+        let error = execute(cli).unwrap_err();
+        assert!(
+            error.to_string().contains("--out-dir is required"),
+            "{error}"
+        );
+    }
 }

@@ -183,7 +183,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn escapes_keywords() {
+    fn var_keyword_gets_trailing_underscore() {
         assert_eq!(var("new"), "new_");
         assert_eq!(var("delete"), "delete_");
         assert_eq!(var("connect"), "connect");
@@ -192,18 +192,18 @@ mod tests {
     }
 
     #[test]
-    fn nameless_fields() {
+    fn field_without_name_uses_its_index() {
         assert_eq!(field("", 0), "v0");
         assert_eq!(field("client_id", 3), "client_id");
     }
 
     #[test]
-    fn quotes_strings() {
+    fn string_literal_escapes_quotes_backslashes_and_newlines() {
         assert_eq!(string_literal("a\"b\\c\n"), r#""a\"b\\c\n""#);
     }
 
     #[test]
-    fn fills_templates() {
+    fn fill_replaces_every_key() {
         assert_eq!(fill("a @x@ b @y@", &[("x", "1"), ("y", "2")]), "a 1 b 2");
     }
 }

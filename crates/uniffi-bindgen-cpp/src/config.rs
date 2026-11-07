@@ -44,7 +44,8 @@ impl Config {
         }
     }
 
-    pub fn namespace_for(&self, ci_namespace: &str) -> String {
+    /// Returns the configured namespace, or `ci_namespace` when none is set.
+    pub(crate) fn namespace_for(&self, ci_namespace: &str) -> String {
         self.namespace
             .clone()
             .unwrap_or_else(|| ci_namespace.to_owned())
@@ -52,14 +53,16 @@ impl Config {
 }
 
 impl CustomTypeConfig {
-    pub fn lift(&self, value: &str) -> String {
+    /// Returns the expression that lifts the builtin `value` into the custom type.
+    pub(crate) fn lift(&self, value: &str) -> String {
         match &self.lift {
             Some(expr) => expr.replace("{}", value),
             None => value.to_owned(),
         }
     }
 
-    pub fn lower(&self, value: &str) -> String {
+    /// Returns the expression that lowers the custom `value` into its builtin type.
+    pub(crate) fn lower(&self, value: &str) -> String {
         match &self.lower {
             Some(expr) => expr.replace("{}", value),
             None => value.to_owned(),
@@ -72,7 +75,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn missing_section_is_default() {
+    fn from_root_toml_without_section_is_default() {
         let root: toml::Value = toml::from_str("[bindings.kotlin]\npackage_name='x'").unwrap();
         let config = Config::from_root_toml(&root).unwrap();
         assert_eq!(config.namespace, None);
@@ -80,7 +83,7 @@ mod tests {
     }
 
     #[test]
-    fn parses_custom_types() {
+    fn from_root_toml_reads_namespace_and_custom_types() {
         let root: toml::Value = toml::from_str(
             r#"
             [bindings.cpp]
@@ -96,5 +99,22 @@ mod tests {
         let url = &config.custom_types["Url"];
         assert_eq!(url.lift("v"), "v");
         assert_eq!(url.lower("v"), "v");
+    }
+
+    #[test]
+    fn from_root_toml_with_wrong_type_is_an_error() {
+        let root: toml::Value = toml::from_str("[bindings.cpp]\nomit_checksums = 'yes'").unwrap();
+        assert!(Config::from_root_toml(&root).is_err());
+    }
+
+    #[test]
+    fn custom_type_expressions_substitute_the_value() {
+        let config = CustomTypeConfig {
+            lift: Some("Url::parse({})".into()),
+            lower: Some("{}.str()".into()),
+            ..CustomTypeConfig::default()
+        };
+        assert_eq!(config.lift("v"), "Url::parse(v)");
+        assert_eq!(config.lower("v"), "v.str()");
     }
 }

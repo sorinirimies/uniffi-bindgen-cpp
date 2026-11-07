@@ -1,3 +1,5 @@
+//! The `uniffi-bindgen-cpp` binary: parses the arguments and reports errors.
+
 use std::process::ExitCode;
 
 fn main() -> ExitCode {

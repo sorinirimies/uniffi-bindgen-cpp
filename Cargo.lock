@@ -631,6 +631,7 @@ dependencies = [
  "camino",
  "clap",
  "serde",
+ "tempfile",
  "toml",
  "uniffi_bindgen",
 ]

@@ -25,13 +25,17 @@ pub const RUNTIME_HEADER_NAME: &str = "uniffi_runtime.hpp";
 /// The generated header and implementation of one component.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GeneratedFiles {
+    /// File name of the header, `<namespace>.hpp`.
     pub header_name: String,
+    /// Contents of the header.
     pub header: String,
+    /// File name of the implementation, `<namespace>.cpp`.
     pub source_name: String,
+    /// Contents of the implementation.
     pub source: String,
 }
 
-/// Generate the C++ files for one component.
+/// Generates the C++ files for one component.
 pub fn generate_component(ci: &ComponentInterface, config: &Config) -> GeneratedFiles {
     let generator = Gen::new(ci, config);
     let stem = ci.namespace();
@@ -44,7 +48,7 @@ pub fn generate_component(ci: &ComponentInterface, config: &Config) -> Generated
     }
 }
 
-/// Generate the C++ files from UDL source text, without a compiled library.
+/// Generates the C++ files from UDL source text, without a compiled library.
 ///
 /// Meant for tests and tooling: the result has the same shape as when generating from a
 /// library, but definitions that only exist as proc-macros are missing.
@@ -97,7 +101,7 @@ impl BindingGenerator for CppBindingGenerator {
     }
 }
 
-/// Write the runtime header into `out_dir`.
+/// Writes the runtime header into `out_dir`.
 pub fn write_runtime(out_dir: &Utf8Path) -> Result<()> {
     write_file(out_dir, RUNTIME_HEADER_NAME, RUNTIME_HEADER)
 }

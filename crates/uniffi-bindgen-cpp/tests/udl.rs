@@ -3,7 +3,9 @@
 
 use std::process::Command;
 
-use uniffi_bindgen_cpp::{Config, GeneratedFiles, generate_from_udl};
+use uniffi_bindgen_cpp::{
+    Config, GeneratedFiles, RUNTIME_HEADER, RUNTIME_HEADER_NAME, generate_from_udl,
+};
 
 const UDL: &str = r#"
 namespace sample {
@@ -13,6 +15,11 @@ namespace sample {
     [Async] string fetch(string key);
     sequence<string> names();
     record<string, u32> counts();
+    bytes reverse(bytes data);
+};
+
+dictionary Holder {
+    Thing thing;
 };
 
 [Error]
@@ -57,7 +64,7 @@ fn generate() -> GeneratedFiles {
 }
 
 #[test]
-fn header_declares_the_api() {
+fn header_declares_every_kind_of_definition() {
     let h = generate().header;
     for expected in [
         "#pragma once",
@@ -89,7 +96,7 @@ fn header_declares_the_api() {
 }
 
 #[test]
-fn trailing_defaults_only() {
+fn header_keeps_argument_defaults() {
     let h = generate().header;
     assert!(
         h.contains("shape_of(const Point& p, double radius = 2.5);")
@@ -99,7 +106,7 @@ fn trailing_defaults_only() {
 }
 
 #[test]
-fn source_calls_the_scaffolding() {
+fn source_calls_the_scaffolding_and_checks_status() {
     let s = generate().source;
     for expected in [
         "#include \"sample.hpp\"",
@@ -116,7 +123,7 @@ fn source_calls_the_scaffolding() {
 }
 
 #[test]
-fn namespace_can_be_overridden() {
+fn config_namespace_overrides_the_udl_namespace() {
     let config = Config {
         namespace: Some("mine".into()),
         ..Config::default()
@@ -128,7 +135,7 @@ fn namespace_can_be_overridden() {
 }
 
 #[test]
-fn checksums_can_be_omitted() {
+fn config_omit_checksums_drops_the_check() {
     let with = generate().source;
     let without = generate_from_udl(
         UDL,
@@ -144,8 +151,9 @@ fn checksums_can_be_omitted() {
     assert!(!without.contains("API checksum mismatch"));
 }
 
-#[test]
-fn generated_code_compiles() {
+/// Compiles `files` with the system C++ compiler (warnings are errors). Returns
+/// `false` when there is no compiler, so the caller can skip.
+fn compiles(files: &GeneratedFiles) -> bool {
     let Some(compiler) = ["c++", "clang++", "g++"].into_iter().find(|c| {
         Command::new(c)
             .arg("--version")
@@ -153,28 +161,86 @@ fn generated_code_compiles() {
             .is_ok_and(|o| o.status.success())
     }) else {
         eprintln!("no C++ compiler found, skipping");
-        return;
+        return false;
     };
-    let dir =
-        std::env::temp_dir().join(format!("uniffi-bindgen-cpp-compile-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).expect("temp dir");
-    let files = generate();
-    std::fs::write(
-        dir.join("uniffi_runtime.hpp"),
-        uniffi_bindgen_cpp::RUNTIME_HEADER,
-    )
-    .expect("write");
-    std::fs::write(dir.join(&files.header_name), &files.header).expect("write");
-    std::fs::write(dir.join(&files.source_name), &files.source).expect("write");
+    let dir = tempfile::tempdir().expect("temp dir");
+    let path = |name: &str| dir.path().join(name);
+    std::fs::write(path(RUNTIME_HEADER_NAME), RUNTIME_HEADER).expect("write runtime");
+    std::fs::write(path(&files.header_name), &files.header).expect("write header");
+    std::fs::write(path(&files.source_name), &files.source).expect("write source");
     let out = Command::new(compiler)
         .args(["-std=c++17", "-Wall", "-Wextra", "-Werror", "-fsyntax-only"])
-        .arg(dir.join(&files.source_name))
+        .arg(path(&files.source_name))
         .output()
         .expect("run the compiler");
-    let _ = std::fs::remove_dir_all(&dir);
     assert!(
         out.status.success(),
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
+    true
+}
+
+#[test]
+fn generated_code_compiles() {
+    compiles(&generate());
+}
+
+// Regression: with no functions the status helper was unused, and `-Werror`
+// builds of the generated code failed with `-Wunused-function`.
+#[test]
+fn empty_namespace_generates_compilable_code() {
+    let files = generate_from_udl("namespace empty {};", "empty", &Config::default()).unwrap();
+    assert!(files.header.contains("namespace empty {"));
+    compiles(&files);
+}
+
+#[test]
+fn invalid_udl_is_an_error() {
+    assert!(
+        generate_from_udl(
+            "namespace broken { u32 f(; };",
+            "broken",
+            &Config::default()
+        )
+        .is_err()
+    );
+}
+
+// Regression: bytes were once lowered as a raw buffer without the length prefix
+// Rust reads, so every `bytes` argument arrived garbled.
+#[test]
+fn bytes_go_through_the_length_prefixed_codec() {
+    let files = generate();
+    assert!(
+        files
+            .source
+            .contains("uniffi_detail::lower_buf<std::vector<uint8_t>>(data)")
+    );
+    assert!(
+        files
+            .source
+            .contains("uniffi_detail::lift_buf<std::vector<uint8_t>>(result)")
+    );
+    assert!(!files.source.contains("lower_bytes") && !files.source.contains("lift_bytes"));
+}
+
+// Regression: a record holding an object used `Codec<std::shared_ptr<Obj>>` before
+// it was defined, which does not compile.
+#[test]
+fn object_codecs_are_defined_before_record_codecs() {
+    let h = generate().header;
+    let object = h
+        .find("struct Codec<std::shared_ptr<sample::Thing>> {")
+        .expect("object codec");
+    let record = h
+        .find("struct Codec<sample::Holder> {")
+        .expect("record codec");
+    assert!(object < record, "object codec must come first");
+}
+
+// Regression: callback vtable types were qualified twice (`ffi::ffi::`).
+#[test]
+fn ffi_names_are_qualified_once() {
+    assert!(!generate().source.contains("ffi::ffi::"));
 }
