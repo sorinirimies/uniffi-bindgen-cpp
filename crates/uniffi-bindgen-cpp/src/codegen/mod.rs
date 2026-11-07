@@ -25,6 +25,12 @@ pub const RUNTIME_HEADER: &str = include_str!("../runtime/uniffi_runtime.hpp");
 /// Name of the runtime header file.
 pub const RUNTIME_HEADER_NAME: &str = "uniffi_runtime.hpp";
 
+/// The CMake module with `uniffi_cargo_library` and `uniffi_cpp_bindings`.
+pub const CMAKE_MODULE: &str = include_str!("../../cmake/UniffiCpp.cmake");
+
+/// Name of the CMake module file.
+pub const CMAKE_MODULE_NAME: &str = "UniffiCpp.cmake";
+
 /// The generated header and implementation of one component.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GeneratedFiles {
@@ -144,6 +150,11 @@ fn apply_renames(components: &mut [Component<Config>]) {
 /// Writes the runtime header into `out_dir`.
 pub fn write_runtime(out_dir: &Utf8Path) -> Result<()> {
     write_file(out_dir, RUNTIME_HEADER_NAME, RUNTIME_HEADER)
+}
+
+/// Writes the CMake module into `out_dir`.
+pub fn write_cmake_module(out_dir: &Utf8Path) -> Result<()> {
+    write_file(out_dir, CMAKE_MODULE_NAME, CMAKE_MODULE)
 }
 
 fn write_file(dir: &Utf8Path, name: &str, contents: &str) -> Result<()> {

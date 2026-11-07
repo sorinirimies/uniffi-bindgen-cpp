@@ -5,7 +5,7 @@ use camino::Utf8PathBuf;
 use clap::{Parser, Subcommand};
 use uniffi_bindgen::cargo_metadata::CrateConfigSupplier;
 
-use crate::codegen::{CppBindingGenerator, write_runtime};
+use crate::codegen::{CppBindingGenerator, write_cmake_module, write_runtime};
 
 /// C++ bindings generator for UniFFI.
 #[derive(Debug, Parser)]
@@ -51,6 +51,11 @@ enum Command {
         /// Directory to write `uniffi_runtime.hpp` to.
         out_dir: Utf8PathBuf,
     },
+    /// Write the CMake module (`UniffiCpp.cmake`) that builds a crate and its bindings.
+    Cmake {
+        /// Directory to write `UniffiCpp.cmake` to.
+        out_dir: Utf8PathBuf,
+    },
 }
 
 /// Parses the process arguments and runs the command.
@@ -78,6 +83,7 @@ fn execute(cli: Cli) -> Result<()> {
             metadata_no_deps,
         ),
         Command::Runtime { out_dir } => write_runtime(&out_dir),
+        Command::Cmake { out_dir } => write_cmake_module(&out_dir),
     }
 }
 

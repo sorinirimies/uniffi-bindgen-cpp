@@ -281,3 +281,17 @@ def "test fixtures: selection skips SKIP and honours --only" [] {
     assert equal (selected $libs "" | get name) ["a" "b"]
     assert equal (selected $libs "b" | get name) ["b"]
 }
+
+use ../ci/cmake_examples.nu [bindgen_path examples]
+
+def "test cmake_examples: generator path per platform" [] {
+    assert equal (bindgen_path "/r" "linux") "/r/target/debug/uniffi-bindgen-cpp"
+    assert equal (bindgen_path "/r" "windows") "/r/target/debug/uniffi-bindgen-cpp.exe"
+}
+
+def "test cmake_examples: stem-mqtt only with a checkout" [] {
+    assert equal (examples "" | get name) ["tour"]
+    let both = (examples "/tmp/stem")
+    assert equal ($both | get name) ["tour" "stem-mqtt"]
+    assert equal ($both | last | get args) ["-DSTEM_MQTT_DIR=/tmp/stem"]
+}

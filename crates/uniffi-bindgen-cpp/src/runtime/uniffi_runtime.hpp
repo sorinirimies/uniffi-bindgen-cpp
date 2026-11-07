@@ -4,7 +4,11 @@
 // handle map, the exception types and the async machinery.
 //
 // Requires C++17.
-#pragma once
+//
+// Bindings for several libraries each bring a copy; the guard (not `#pragma once`,
+// which goes by path) makes the copies one. Copies must come from the same release.
+#ifndef UNIFFI_BINDGEN_CPP_RUNTIME_HPP
+#define UNIFFI_BINDGEN_CPP_RUNTIME_HPP
 
 #include <atomic>
 #include <chrono>
@@ -886,3 +890,5 @@ Future<R> start_future(uint64_t handle, PollFn poll, HandleFn cancel, HandleFn f
 
 }  // namespace detail
 }  // namespace uniffi
+
+#endif  // UNIFFI_BINDGEN_CPP_RUNTIME_HPP

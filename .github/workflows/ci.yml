@@ -38,15 +38,49 @@ jobs:
       - name: Quality gate
         run: nu scripts/ci/quality_gate.nu
 
-  # Generates C++ for a real UniFFI crate, compiles it and runs a C++ test
-  # (async, callbacks, errors, objects), with and without sanitizers.
+  # Generates C++ for uniffi's own fixture suite and the tour crate, compiles it
+  # with warnings as errors and runs the C++ tests, with GCC and Clang, with and
+  # without sanitizers.
   cpp:
-    name: C++ end-to-end (${{ matrix.os }})
+    name: C++ (${{ matrix.os }}, ${{ matrix.cxx }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        include:
+          - { os: ubuntu-latest, cxx: g++ }
+          - { os: ubuntu-latest, cxx: clang++ }
+          - { os: macos-latest, cxx: clang++ }
+    env:
+      CXX: ${{ matrix.cxx }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            fixtures/uniffi -> target
+            fixtures/tour -> target
+      - uses: hustcer/setup-nu@v3
+        with:
+          version: "0.116.1"
+      - name: Tour end-to-end test
+        run: nu scripts/ci/cpp_e2e.nu
+      - name: uniffi fixture suite
+        run: nu scripts/ci/fixtures.nu
+      - name: uniffi fixture suite with sanitizers
+        run: nu scripts/ci/fixtures.nu --sanitize
+
+  # The CMake module on every system, Windows with MSVC; on Linux also stem-mqtt,
+  # a real two-library project.
+  cmake:
+    name: CMake (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
@@ -54,10 +88,18 @@ jobs:
       - uses: hustcer/setup-nu@v3
         with:
           version: "0.116.1"
-      - name: C++ end-to-end test
-        run: nu scripts/ci/cpp_e2e.nu
-      - name: C++ end-to-end test with sanitizers
-        run: nu scripts/ci/cpp_e2e.nu --sanitize
+      - name: Check out stem-mqtt
+        if: runner.os == 'Linux'
+        uses: actions/checkout@v7
+        with:
+          repository: sorinirimies/stem-mqtt
+          path: stem-mqtt
+      - name: CMake examples
+        if: runner.os != 'Linux'
+        run: nu scripts/ci/cmake_examples.nu
+      - name: CMake examples with stem-mqtt
+        if: runner.os == 'Linux'
+        run: nu scripts/ci/cmake_examples.nu --stem-mqtt stem-mqtt
 
   # The binary ships for all three systems: paths, line endings and process
   # handling differ there.

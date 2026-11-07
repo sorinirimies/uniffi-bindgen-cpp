@@ -16,7 +16,7 @@ mod config;
 
 pub use cli::run;
 pub use codegen::{
-    CppBindingGenerator, GeneratedFiles, RUNTIME_HEADER, RUNTIME_HEADER_NAME, generate_component,
-    generate_from_udl, write_runtime,
+    CMAKE_MODULE, CMAKE_MODULE_NAME, CppBindingGenerator, GeneratedFiles, RUNTIME_HEADER,
+    RUNTIME_HEADER_NAME, generate_component, generate_from_udl, write_cmake_module, write_runtime,
 };
 pub use config::{Config, CustomTypeConfig};

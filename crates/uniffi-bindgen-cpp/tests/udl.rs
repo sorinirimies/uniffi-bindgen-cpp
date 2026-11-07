@@ -150,15 +150,20 @@ fn config_omit_checksums_drops_the_check() {
     assert!(!without.contains("API checksum mismatch"));
 }
 
-/// Compiles `files` with the system C++ compiler (warnings are errors). Returns
-/// `false` when there is no compiler, so the caller can skip.
-fn compiles(files: &GeneratedFiles) -> bool {
-    let Some(compiler) = ["c++", "clang++", "g++"].into_iter().find(|c| {
+/// The first C++ compiler that runs, if any.
+fn cxx_compiler() -> Option<&'static str> {
+    ["c++", "clang++", "g++"].into_iter().find(|c| {
         Command::new(c)
             .arg("--version")
             .output()
             .is_ok_and(|o| o.status.success())
-    }) else {
+    })
+}
+
+/// Compiles `files` with the system C++ compiler (warnings are errors). Returns
+/// `false` when there is no compiler, so the caller can skip.
+fn compiles(files: &GeneratedFiles) -> bool {
+    let Some(compiler) = cxx_compiler() else {
         eprintln!("no C++ compiler found, skipping");
         return false;
     };
@@ -246,4 +251,39 @@ fn value_codecs_are_defined_after_every_codec_class() {
 #[test]
 fn ffi_names_are_qualified_once() {
     assert!(!generate().source.contains("ffi::ffi::"));
+}
+
+// Regression: two sets of bindings each carry a copy of the runtime header, and
+// `#pragma once` (which goes by path) let both in: "redefinition of 'RustBuffer'".
+#[test]
+fn runtime_copies_in_two_directories_are_one() {
+    let Some(compiler) = cxx_compiler() else {
+        eprintln!("no C++ compiler found, skipping");
+        return;
+    };
+    let dir = tempfile::tempdir().unwrap();
+    for sub in ["a", "b"] {
+        std::fs::create_dir(dir.path().join(sub)).unwrap();
+        std::fs::write(
+            dir.path().join(sub).join(RUNTIME_HEADER_NAME),
+            RUNTIME_HEADER,
+        )
+        .unwrap();
+    }
+    let main = dir.path().join("main.cpp");
+    std::fs::write(
+        &main,
+        "#include \"a/uniffi_runtime.hpp\"\n#include \"b/uniffi_runtime.hpp\"\nint main() { return 0; }\n",
+    )
+    .unwrap();
+    let out = Command::new(compiler)
+        .args(["-std=c++17", "-fsyntax-only"])
+        .arg(&main)
+        .output()
+        .expect("run the compiler");
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 }
