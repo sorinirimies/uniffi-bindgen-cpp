@@ -37,7 +37,8 @@ inline bool near(double a, double b, double epsilon = 1e-6) {
 
 }  // namespace check
 
-#define CHECK(cond) ::check::record(static_cast<bool>(cond), __FILE__, __LINE__, #cond)
+// Variadic, so that braced initializers with commas need no extra parentheses.
+#define CHECK(...) ::check::record(static_cast<bool>(__VA_ARGS__), __FILE__, __LINE__, #__VA_ARGS__)
 
 #define CHECK_EQ(a, b) ::check::record((a) == (b), __FILE__, __LINE__, #a " == " #b)
 

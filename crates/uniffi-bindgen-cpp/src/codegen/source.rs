@@ -227,7 +227,13 @@ uniffi::RustBuffer lower_error(const E& error) {
                 );
             }
         }
-        let mut inits = String::new();
+        // Components this one uses register their callback interfaces first: C++ may pass
+        // one of their traits to this component before calling into theirs.
+        let mut inits: String = self
+            .external_namespaces()
+            .iter()
+            .map(|ns| format!("        ::{ns}::uniffi_detail::ensure_init();\n"))
+            .collect();
         for cb in self.ci.callback_interface_definitions() {
             let _ = writeln!(inits, "        init_{}();", class(cb.name()));
         }

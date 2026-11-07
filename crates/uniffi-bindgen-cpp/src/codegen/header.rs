@@ -105,7 +105,7 @@ impl Gen<'_> {
     }
 
     /// The namespaces of other components this one refers to.
-    fn external_namespaces(&self) -> BTreeSet<String> {
+    pub(crate) fn external_namespaces(&self) -> BTreeSet<String> {
         self.ci
             .iter_external_types()
             .filter_map(|t| self.ci.namespace_for_type(t).ok().map(str::to_owned))
@@ -563,7 +563,7 @@ impl Gen<'_> {
 
     fn emit_detail_declarations(&self) -> String {
         let mut out = String::from(
-            "/// Plumbing shared with other components that use this one's types.\nnamespace uniffi_detail {\n",
+            "/// Plumbing shared with other components that use this one's types.\nnamespace uniffi_detail {\n/// Checks the library and registers the callback interfaces, once.\nvoid ensure_init();\n",
         );
         for o in self.ci.object_definitions() {
             let name = class(o.name());
