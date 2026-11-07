@@ -56,12 +56,23 @@ impl<'a> Gen<'a> {
     /// The fully qualified name of a user-defined type. Always qualified, so that a
     /// member or variant with the same name cannot hide it.
     pub(crate) fn named(&self, t: &Type, name: &str) -> String {
+        let name = self.renamed_type(name);
         let q = self.qualifier(t);
         if q.is_empty() {
             self.local(name)
         } else {
             format!("{q}{}", class(name))
         }
+    }
+
+    /// `name` after the `rename` table. UniFFI renames definitions and most references,
+    /// but not the type a constructor returns, so references go through this too.
+    fn renamed_type<'n>(&'n self, name: &'n str) -> &'n str {
+        self.config
+            .rename
+            .get(name)
+            .and_then(|v| v.as_str())
+            .unwrap_or(name)
     }
 
     /// The fully qualified name of a type this component defines.
@@ -210,7 +221,7 @@ impl<'a> Gen<'a> {
                 format!(
                     "{}uniffi_detail::lower_{}({expr})",
                     self.qualifier(t),
-                    class(name)
+                    class(self.renamed_type(name))
                 )
             }
             Type::Custom { name, builtin, .. } => {
@@ -242,7 +253,7 @@ impl<'a> Gen<'a> {
                 format!(
                     "{}uniffi_detail::lift_{}({expr})",
                     self.qualifier(t),
-                    class(name)
+                    class(self.renamed_type(name))
                 )
             }
             Type::Custom { name, builtin, .. } => {

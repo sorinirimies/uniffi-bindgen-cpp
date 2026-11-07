@@ -3,7 +3,7 @@
 # vendored to run their tests against the C++ bindings. Each fixture's
 # `cpp/test_*.cpp` ports the upstream Python test named at its top.
 # Changes from upstream: the test harness and the per-language tests,
-# dev-dependencies, examples and binaries are removed.
+# dev-dependencies, the ffi-trace feature, examples and binaries are removed.
 [workspace]
 resolver = "2"
 members = [

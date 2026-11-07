@@ -99,3 +99,35 @@ BindingObject = "SwiftObject"
 # Swift method and arg renaming
 "BindingObject.method" = "swift_method"
 "BindingObject.method.arg" = "swiftArg"
+
+#
+# C++ (added for uniffi-bindgen-cpp)
+#
+[bindings.cpp.rename]
+binding_function = "cpp_function"
+"binding_function.record" = "cpp_record"
+
+BindingRecord = "CppRecord"
+"BindingRecord.item" = "cpp_item"
+
+BindingEnum = "CppEnum"
+"BindingEnum.VariantA" = "CppVariantA"
+"BindingEnum.Record" = "CppRecord"
+
+BindingEnumWithFields = "CppEnumWithFields"
+"BindingEnumWithFields.VariantA" = "CppVariantA"
+"BindingEnumWithFields.VariantA.binding_int" = "cpp_int"
+"BindingEnumWithFields.Record" = "CppRecord"
+"BindingEnumWithFields.Record.binding_record" = "cpp_record"
+"BindingEnumWithFields.Record.binding_int" = "cpp_int"
+
+BindingError = "CppError"
+"BindingError.Simple" = "CppSimple"
+
+BindingTrait = "CppTrait"
+"BindingTrait.trait_method" = "cpp_trait_method"
+
+BindingObject = "CppObject"
+"BindingObject.new.value" = "cpp_value"
+"BindingObject.method" = "cpp_method"
+"BindingObject.method.arg" = "cpp_arg"

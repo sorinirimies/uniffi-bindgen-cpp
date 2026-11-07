@@ -10,7 +10,7 @@ mod source;
 mod types;
 mod values;
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 
 use anyhow::{Context, Result};
 use camino::Utf8Path;
@@ -91,6 +91,7 @@ impl BindingGenerator for CppBindingGenerator {
                 component.config.cdylib_name = settings.cdylib.clone();
             }
         }
+        apply_renames(components);
         Ok(())
     }
 
@@ -121,6 +122,22 @@ impl BindingGenerator for CppBindingGenerator {
             }
         }
         Ok(())
+    }
+}
+
+/// Applies every component's `rename` table to all components, so that a renamed
+/// type is renamed wherever it is used. Runs before the FFI functions are derived.
+fn apply_renames(components: &mut [Component<Config>]) {
+    let renames: HashMap<String, toml::Table> = components
+        .iter()
+        .filter(|c| !c.config.rename.is_empty())
+        .map(|c| (c.ci.crate_name().to_owned(), c.config.rename.clone()))
+        .collect();
+    if renames.is_empty() {
+        return;
+    }
+    for component in components {
+        uniffi_bindgen::interface::rename(&mut component.ci, &renames);
     }
 }
 

@@ -17,6 +17,9 @@ pub struct Config {
     pub omit_checksums: bool,
     /// How custom types map to C++ types.
     pub custom_types: BTreeMap<String, CustomTypeConfig>,
+    /// Renames items for C++ only, in UniFFI's dot notation: `Record = "NewName"`,
+    /// `"Record.field" = "new_field"`, `"Object.method.arg" = "new_arg"`.
+    pub rename: toml::Table,
 }
 
 /// Maps a UniFFI custom type to a C++ type.
