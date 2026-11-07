@@ -295,3 +295,22 @@ def "test cmake_examples: stem-mqtt only with a checkout" [] {
     assert equal ($both | get name) ["tour" "stem-mqtt"]
     assert equal ($both | last | get args) ["-DSTEM_MQTT_DIR=/tmp/stem"]
 }
+
+use ../ci/fuzz_cpp.nu [build_args run_args]
+
+def "test fuzz_cpp: libFuzzer or the smoke driver" [] {
+    assert ("-fsanitize=fuzzer,address,undefined" in (build_args true "/o"))
+    assert not ("-DUNIFFI_FUZZ_SMOKE" in (build_args true "/o"))
+    assert ("-DUNIFFI_FUZZ_SMOKE" in (build_args false "/o"))
+    assert equal (run_args true 30 "/c") ["/c" "-max_total_time=30" "-max_len=4096"]
+    assert equal (run_args false 30 "/c") ["1000000"]
+}
+
+use ../bench.nu [bench_args]
+
+def "test bench: optimized and linked to the fixture" [] {
+    let args = (bench_args "/o" "/l" "/o/bench")
+    assert ("-O2" in $args)
+    assert ("/o/benchmarks.cpp" in $args)
+    assert ("-luniffi_benchmarks" in $args)
+}

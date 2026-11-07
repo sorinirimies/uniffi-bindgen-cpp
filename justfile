@@ -57,6 +57,14 @@ e2e *args:
 fixtures *args:
     nu scripts/ci/fixtures.nu {{ args }}
 
+# uniffi's benchmarks through the C++ bindings (args go to Criterion, e.g. a filter)
+bench *args:
+    nu scripts/bench.nu {{ args }}
+
+# Fuzz the C++ runtime's decoding (libFuzzer if clang has it)
+fuzz-cpp *args:
+    nu scripts/ci/fuzz_cpp.nu {{ args }}
+
 # Build and test the CMake examples (args: --stem-mqtt <checkout>)
 cmake *args:
     nu scripts/ci/cmake_examples.nu {{ args }}

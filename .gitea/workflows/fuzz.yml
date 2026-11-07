@@ -40,6 +40,8 @@ jobs:
         run: nu scripts/ci/apt.nu
       - name: Fuzz each target for 60s
         run: nu scripts/ci/fuzz_all.nu --secs 60
+      - name: Fuzz the C++ runtime's decoding
+        run: nu scripts/ci/fuzz_cpp.nu --secs 60
       - name: Upload crashes
         if: failure()
         uses: actions/upload-artifact@v3

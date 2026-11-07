@@ -149,12 +149,13 @@ int main() {
     CHECK_EQ(record.a, "foo");
     CHECK_EQ(record.b, 42u);
 
-    // Cancelling a Rust future.
-    auto task = say_after(200, "Alice");
-    std::this_thread::sleep_for(100ms);
+    // Cancelling a Rust future: get() throws at once instead of waiting for it.
+    auto task = say_after(5000, "Alice");
+    std::this_thread::sleep_for(50ms);
+    t0 = steady_clock::now();
     task.cancel();
-    std::this_thread::sleep_for(200ms);
     CHECK_THROWS(task.get(), uniffi::CancelledError);
+    CHECK(seconds_since(t0) < 1.0);
 
     // A cancelled future releases what it holds: the next call gets the lock.
     auto holder = use_shared_resource(SharedResourceOptions{5000, 100});

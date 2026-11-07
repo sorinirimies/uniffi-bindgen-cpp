@@ -7,6 +7,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "benchmarks",
     "callbacks",
     "coverall",
     "docstring-proc-macro",

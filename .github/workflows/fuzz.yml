@@ -5,9 +5,9 @@ on:
     - cron: "0 4 * * *"
   push:
     branches: [main]
-    paths: ["fuzz/**", "crates/**/src/**", "Cargo.lock"]
+    paths: ["fuzz/**", "crates/**/src/**", "Cargo.lock", "scripts/ci/fuzz_cpp.nu"]
   pull_request:
-    paths: ["fuzz/**", "crates/**/src/**", "Cargo.lock"]
+    paths: ["fuzz/**", "crates/**/src/**", "Cargo.lock", "scripts/ci/fuzz_cpp.nu"]
   workflow_dispatch:
 
 env:
@@ -38,3 +38,14 @@ jobs:
         with:
           name: fuzz-artifacts
           path: fuzz/artifacts/
+
+  fuzz-cpp:
+    name: C++ runtime fuzz (libFuzzer)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: hustcer/setup-nu@v3
+        with:
+          version: "0.116.1"
+      - name: Fuzz the C++ decoding for 60s
+        run: nu scripts/ci/fuzz_cpp.nu --secs 60

@@ -10,6 +10,7 @@
 #ifndef UNIFFI_BINDGEN_CPP_RUNTIME_HPP
 #define UNIFFI_BINDGEN_CPP_RUNTIME_HPP
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -139,6 +140,9 @@ public:
 
     bool has_remaining() const { return offset_ < size_; }
 
+    /// Bytes not read yet: an upper bound for any length prefix of bytes.
+    size_t remaining() const { return size_ - offset_; }
+
 private:
     void need(size_t count) const {
         if (size_ - offset_ < count) {
@@ -225,8 +229,8 @@ template <>
 struct Codec<std::string> {
     static std::string read(Reader& r) {
         int32_t len = r.read_int<int32_t>();
-        if (len < 0) {
-            throw InternalError("negative string length");
+        if (len < 0 || static_cast<size_t>(len) > r.remaining()) {
+            throw InternalError("string length out of bounds");
         }
         std::string out(static_cast<size_t>(len), '\0');
         r.read_bytes(out.data(), out.size());
@@ -247,10 +251,15 @@ struct Codec<std::vector<T>> {
         }
         std::vector<T> out;
         if constexpr (std::is_same_v<T, uint8_t>) {
+            if (static_cast<size_t>(len) > r.remaining()) {
+                throw InternalError("byte sequence length out of bounds");
+            }
             out.resize(static_cast<size_t>(len));
             r.read_bytes(out.data(), out.size());
         } else {
-            out.reserve(static_cast<size_t>(len));
+            // A corrupt length must not allocate gigabytes: elements take at least a
+            // byte each, except empty records, which need no reserved space.
+            out.reserve(std::min(static_cast<size_t>(len), r.remaining()));
             for (int32_t i = 0; i < len; ++i) {
                 out.push_back(Codec<T>::read(r));
             }
@@ -328,6 +337,11 @@ struct Codec<Timestamp> {
         int64_t secs = r.read_int<int64_t>();
         uint32_t nanos = r.read_int<uint32_t>();
         using ns = std::chrono::nanoseconds;
+        // Nanoseconds since the epoch fit in int64_t for about 292 years either way.
+        constexpr int64_t max_secs = std::numeric_limits<int64_t>::max() / 1000000000LL - 1;
+        if (secs > max_secs || secs < -max_secs || nanos > 999999999u) {
+            throw InternalError("timestamp out of range for uniffi::Timestamp");
+        }
         if (secs >= 0) {
             return Timestamp(ns(secs * 1000000000LL + static_cast<int64_t>(nanos)));
         }
@@ -353,7 +367,7 @@ struct Codec<Duration> {
         uint32_t nanos = r.read_int<uint32_t>();
         constexpr uint64_t max_secs =
             static_cast<uint64_t>(std::numeric_limits<int64_t>::max() / 1000000000LL) - 1;
-        if (secs > max_secs) {
+        if (secs > max_secs || nanos > 999999999u) {
             return Duration::max();
         }
         return Duration(static_cast<int64_t>(secs) * 1000000000LL + static_cast<int64_t>(nanos));

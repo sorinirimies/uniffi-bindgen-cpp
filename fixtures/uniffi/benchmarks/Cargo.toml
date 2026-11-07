@@ -1,0 +1,18 @@
+[package]
+name = "uniffi-fixture-benchmarks"
+edition = "2021"
+version = "0.22.0"
+license = "MPL-2.0"
+publish = false
+
+[lib]
+crate-type = ["lib", "cdylib"]
+name = "uniffi_benchmarks"
+bench = false
+
+[dependencies]
+uniffi = { workspace = true }
+clap = { version = "4", features = ["cargo", "std", "derive"] }
+criterion = "0.5.1"
+regex = "1.5.1"
+thiserror = "2"

@@ -287,3 +287,15 @@ fn runtime_copies_in_two_directories_are_one() {
         String::from_utf8_lossy(&out.stderr)
     );
 }
+
+// The whole generated output, so that every change to it shows up in review.
+// Update with `cargo insta review` (or INSTA_UPDATE=always cargo test).
+#[test]
+fn generated_header_snapshot() {
+    insta::assert_snapshot!("sample_header", generate().header);
+}
+
+#[test]
+fn generated_source_snapshot() {
+    insta::assert_snapshot!("sample_source", generate().source);
+}

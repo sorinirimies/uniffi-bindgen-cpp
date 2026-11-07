@@ -71,6 +71,14 @@ def run_library [lib: record, bin: string, lib_dir: string, out_root: string, co
             $failures = ($failures | append {library: $lib.name, step: $"run ($test | path basename)", detail: $"($run.stdout)($run.stderr)"})
         }
     }
+    # Benchmarks are only built here; `just bench` runs them.
+    for bench in (glob $"($lib.dir)/cpp/bench_*.cpp") {
+        let exe = ($out | path join ($bench | path parse | get stem))
+        let r = (do { ^$compiler ...$flags $bench ...$objects $"-I($out)" ...(cxx link_args $lib_dir $lib.name) -o $exe } | complete)
+        if $r.exit_code != 0 {
+            $failures = ($failures | append {library: $lib.name, step: $"build ($bench | path basename)", detail: $r.stderr})
+        }
+    }
     $failures
 }
 
