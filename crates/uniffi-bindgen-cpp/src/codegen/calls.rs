@@ -29,7 +29,12 @@ impl Gen<'_> {
             Some(exprs) => args.extend(exprs),
             None => {
                 for a in c.arguments() {
-                    args.push(self.lower(&a.as_type(), &var(a.name())));
+                    // `&[u8]` arguments are lent to Rust for the call, not copied.
+                    args.push(if a.is_borrowed_bytes() {
+                        format!("uniffi::borrow_bytes({})", var(a.name()))
+                    } else {
+                        self.lower(&a.as_type(), &var(a.name()))
+                    });
                 }
             }
         }

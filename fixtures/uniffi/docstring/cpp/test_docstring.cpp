@@ -1,4 +1,4 @@
-// Port of uniffi-rs v0.31.2 fixtures/docstring/tests/bindings/test_docstring.py
+// Port of uniffi-rs v0.32.2 fixtures/docstring/tests/bindings/test_docstring.py
 // C++ has no run-time docstrings, so this checks the generated header's comments.
 #include <fstream>
 #include <sstream>

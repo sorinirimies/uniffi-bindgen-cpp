@@ -126,6 +126,8 @@ struct Shape {
     /// The variant `V`, or null if this value holds another one.
     template <class V>
     const V* get_if() const { return std::get_if<V>(&variant); }
+    template <class V>
+    V* get_if() { return std::get_if<V>(&variant); }
 
     /// Call `visitor` with the held variant.
     template <class F>

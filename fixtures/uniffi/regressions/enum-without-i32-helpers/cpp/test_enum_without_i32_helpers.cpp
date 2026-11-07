@@ -1,4 +1,4 @@
-// Port of uniffi-rs v0.31.2 fixtures/regressions/enum-without-i32-helpers/tests/bindings/test.py
+// Port of uniffi-rs v0.32.2 fixtures/regressions/enum-without-i32-helpers/tests/bindings/test.py
 #include "check.hpp"
 #include "regression_test_i356.hpp"
 

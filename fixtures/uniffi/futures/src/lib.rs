@@ -54,7 +54,13 @@ impl TimerFuture {
             let mut shared_state: MutexGuard<_> = thread_shared_state.lock().unwrap();
             shared_state.completed = true;
 
-            if let Some(waker) = shared_state.waker.take() {
+            // Release the lock BEFORE waking to avoid deadlocks: waker.wake()
+            // may invoke a foreign callback that re-polls this future, which
+            // would need to acquire shared_state again.
+            let waker = shared_state.waker.take();
+            drop(shared_state);
+
+            if let Some(waker) = waker {
                 waker.wake();
             }
         });
@@ -429,6 +435,32 @@ impl SayAfterUdlTrait for SayAfterImpl2 {
 
 #[uniffi::export]
 fn get_say_after_udl_traits() -> Vec<Arc<dyn SayAfterUdlTrait>> {
+    vec![Arc::new(SayAfterImpl1), Arc::new(SayAfterImpl2)]
+}
+
+// Example of an async trait whose Rust implementation uses tokio resources.
+#[uniffi::export(with_foreign, async_runtime = "tokio")]
+#[async_trait::async_trait]
+pub trait SayAfterTraitTokio: Send + Sync {
+    async fn say_after(&self, ms: u16, who: String) -> String;
+}
+
+#[async_trait::async_trait]
+impl SayAfterTraitTokio for SayAfterImpl1 {
+    async fn say_after(&self, ms: u16, who: String) -> String {
+        say_after_with_tokio(ms, who).await
+    }
+}
+
+#[async_trait::async_trait]
+impl SayAfterTraitTokio for SayAfterImpl2 {
+    async fn say_after(&self, ms: u16, who: String) -> String {
+        say_after_with_tokio(ms, who).await
+    }
+}
+
+#[uniffi::export]
+fn get_say_after_tokio_traits() -> Vec<Arc<dyn SayAfterTraitTokio>> {
     vec![Arc::new(SayAfterImpl1), Arc::new(SayAfterImpl2)]
 }
 

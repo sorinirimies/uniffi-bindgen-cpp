@@ -6,13 +6,19 @@ license = "MPL-2.0"
 publish = false
 
 [lib]
-crate-type = ["lib", "cdylib"]
+crate-type = [
+    "lib",
+    "cdylib",
+]
 name = "uniffi_error_types"
 
 [dependencies]
-uniffi = { workspace = true }
 anyhow = "1"
 thiserror = "2"
 
-[build-dependencies]
-uniffi = { workspace = true, features = ["build"] }
+[dependencies.uniffi]
+workspace = true
+
+[build-dependencies.uniffi]
+features = ["build"]
+workspace = true

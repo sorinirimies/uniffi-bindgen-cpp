@@ -84,14 +84,17 @@ impl Gen<'_> {
         });
     }
 
-    /// The records and enums a member of type `ty` needs complete. `std::vector` and
-    /// `std::shared_ptr` accept incomplete types, so what they hold can come later;
-    /// that is what lets a type refer back to itself through a sequence.
+    /// The records and enums a member of type `ty` needs complete. `std::vector`,
+    /// `std::shared_ptr` and `uniffi::Box` accept incomplete types, so what they
+    /// hold can come later; that is what lets a type refer back to itself through
+    /// a sequence or a `Box`.
     fn complete_type_deps<'t>(&self, ty: &'t Type, deps: &mut Vec<&'t str>) {
         match ty {
             Type::Enum { name, .. } if self.is_error_enum(name) => {}
             Type::Record { name, .. } | Type::Enum { name, .. } => deps.push(name),
-            Type::Optional { inner_type } => self.complete_type_deps(inner_type, deps),
+            Type::Optional { inner_type } | Type::Set { inner_type } => {
+                self.complete_type_deps(inner_type, deps);
+            }
             Type::Map {
                 key_type,
                 value_type,
@@ -230,6 +233,11 @@ impl Gen<'_> {
             Some(type_name) => type_name,
             None => self.cpp_type(builtin),
         };
+        let docstring = self
+            .ci
+            .get_custom_type_definition(name)
+            .and_then(|c| c.docstring());
+        out.push_str(&doc(docstring, 0));
         let _ = writeln!(out, "using {} = {target};", class(name));
     }
 
@@ -308,7 +316,7 @@ impl Gen<'_> {
         );
         let _ = writeln!(
             out,
-            "    /// True if this value holds the variant `V`.\n    template <class V>\n    bool is() const {{ return std::holds_alternative<V>(variant); }}\n\n    /// The variant `V`, or null if this value holds another one.\n    template <class V>\n    const V* get_if() const {{ return std::get_if<V>(&variant); }}\n\n    /// Call `visitor` with the held variant.\n    template <class F>\n    decltype(auto) visit(F&& visitor) const {{ return std::visit(std::forward<F>(visitor), variant); }}"
+            "    /// True if this value holds the variant `V`.\n    template <class V>\n    bool is() const {{ return std::holds_alternative<V>(variant); }}\n\n    /// The variant `V`, or null if this value holds another one.\n    template <class V>\n    const V* get_if() const {{ return std::get_if<V>(&variant); }}\n    template <class V>\n    V* get_if() {{ return std::get_if<V>(&variant); }}\n\n    /// Call `visitor` with the held variant.\n    template <class F>\n    decltype(auto) visit(F&& visitor) const {{ return std::visit(std::forward<F>(visitor), variant); }}"
         );
         if let Some(v) = &value {
             out.push_str(&self.value_member_declarations(v));

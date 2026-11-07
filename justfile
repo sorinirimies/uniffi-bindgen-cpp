@@ -65,6 +65,10 @@ bench *args:
 fuzz-cpp *args:
     nu scripts/ci/fuzz_cpp.nu {{ args }}
 
+# Re-vendor uniffi's fixtures from a uniffi-rs checkout at a tag (e.g. v0.32.2)
+vendor-fixtures repo tag:
+    nu scripts/vendor_fixtures.nu {{ repo }} {{ tag }}
+
 # Build and test the CMake examples (args: --stem-mqtt <checkout>)
 cmake *args:
     nu scripts/ci/cmake_examples.nu {{ args }}

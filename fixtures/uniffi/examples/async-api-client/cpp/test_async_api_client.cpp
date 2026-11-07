@@ -1,4 +1,4 @@
-// Port of uniffi-rs v0.31.2 examples/async-api-client/tests/bindings/test_async_api_client.py
+// Port of uniffi-rs v0.32.2 examples/async-api-client/tests/bindings/test_async_api_client.py
 #include <thread>
 
 #include "async_api_client.hpp"

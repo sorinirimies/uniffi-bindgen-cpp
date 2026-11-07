@@ -352,13 +352,13 @@ void ensure_init() {
         if (ffi::uniffi_sample_checksum_func_add() != 11862) {
             throw uniffi::InternalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project");
         }
-        if (ffi::uniffi_sample_checksum_func_counts() != 32957) {
+        if (ffi::uniffi_sample_checksum_func_counts() != 60382) {
             throw uniffi::InternalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project");
         }
         if (ffi::uniffi_sample_checksum_func_fetch() != 14633) {
             throw uniffi::InternalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project");
         }
-        if (ffi::uniffi_sample_checksum_func_names() != 35730) {
+        if (ffi::uniffi_sample_checksum_func_names() != 53557) {
             throw uniffi::InternalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project");
         }
         if (ffi::uniffi_sample_checksum_func_reverse() != 65335) {

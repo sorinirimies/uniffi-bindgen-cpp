@@ -1,4 +1,4 @@
-// Port of uniffi-rs v0.31.2 examples/remote-types/tests/bindings/test_remote_types.py
+// Port of uniffi-rs v0.32.2 examples/remote-types/tests/bindings/test_remote_types.py
 #include "check.hpp"
 #include "remote_types.hpp"
 

@@ -6,9 +6,14 @@ license = "MPL-2.0"
 publish = false
 
 [lib]
-crate-type = ["lib", "cdylib"]
+crate-type = [
+    "lib",
+    "cdylib",
+]
 name = "arithmeticpm"
 
 [dependencies]
-uniffi = { workspace = true }
 thiserror = "2"
+
+[dependencies.uniffi]
+workspace = true

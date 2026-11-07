@@ -1,4 +1,4 @@
-// Port of uniffi-rs v0.31.2 examples/callbacks/tests/bindings/test_callbacks.py
+// Port of uniffi-rs v0.32.2 examples/callbacks/tests/bindings/test_callbacks.py
 #include <stdexcept>
 
 #include "callbacks.hpp"

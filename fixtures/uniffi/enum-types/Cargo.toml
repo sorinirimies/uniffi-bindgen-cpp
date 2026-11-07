@@ -6,12 +6,18 @@ license = "MPL-2.0"
 publish = false
 
 [lib]
-crate-type = ["lib", "cdylib"]
+crate-type = [
+    "lib",
+    "cdylib",
+]
 name = "enum_types"
 
 [dependencies]
-uniffi = { workspace = true }
 thiserror = "2"
 
-[build-dependencies]
-uniffi = { workspace = true, features = ["build"] }
+[dependencies.uniffi]
+workspace = true
+
+[build-dependencies.uniffi]
+workspace = true
+features = ["build"]

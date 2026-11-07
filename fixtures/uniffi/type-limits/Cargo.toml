@@ -7,10 +7,14 @@ publish = false
 
 [lib]
 name = "uniffi_type_limits"
-crate-type = ["lib", "cdylib"]
+crate-type = [
+    "lib",
+    "cdylib",
+]
 
-[dependencies]
-uniffi = { workspace = true }
+[dependencies.uniffi]
+workspace = true
 
-[build-dependencies]
-uniffi = { workspace = true, features = ["build"] }
+[build-dependencies.uniffi]
+workspace = true
+features = ["build"]

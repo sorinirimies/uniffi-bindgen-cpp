@@ -251,6 +251,47 @@ static void test_custom_types() {
     CHECK(tour::host_of("https://example.com/a/b") == "example.com");
 }
 
+// uniffi 0.32: recursive types hold their recursion in uniffi::Box, which
+// copies deeply; HashSet is std::set; `&[u8]` arguments are lent, not copied.
+static void test_uniffi_032() {
+    using tour::Expr;
+    Expr two{Expr::Num{2}};
+    Expr expr{Expr::Add{Expr{Expr::Neg{two}}, Expr{Expr::Num{5}}}};
+    CHECK(tour::eval(expr) == 3);
+
+    Expr sum = tour::sum_expr({1, 2, 3, 4});
+    CHECK(tour::eval(sum) == 10);
+    auto add = sum.get_if<Expr::Add>();
+    CHECK(add != nullptr && add->right->get_if<Expr::Num>()->value == 4);
+
+    Expr copy = sum;  // deep: changing the copy leaves the original alone
+    copy.get_if<Expr::Add>()->right = Expr{Expr::Num{40}};
+    CHECK(tour::eval(copy) == 46);
+    CHECK(tour::eval(sum) == 10);
+    CHECK(!(copy == sum));
+    CHECK(Expr{} == Expr{});
+
+    tour::TreeNode leaf{"leaf", {}, std::nullopt};
+    tour::TreeNode tree{"root", {leaf, leaf}, uniffi::Box<tour::TreeNode>(leaf)};
+    CHECK(tour::count_nodes(tree) == 4);
+
+    std::set<std::string> words = tour::unique_words("a b a c b");
+    CHECK((words == std::set<std::string>{"a", "b", "c"}));
+    CHECK(tour::set_sum({1, 2, 3}) == 6);
+    CHECK(tour::set_sum({}) == 0);
+
+    std::vector<uint8_t> bytes(100000, 1);
+    CHECK(tour::checksum(bytes) == 100000);
+    CHECK(tour::checksum({}) == 0);
+    auto adler = tour::Adler::new_();
+    adler->update({1, 2});
+    adler->update({3});
+    CHECK(adler->value() == (1u * 31 + 2) * 31 + 3);
+
+    uniffi::Box<int> empty;
+    CHECK_THROWS(uniffi::InternalError, (void)*empty);
+}
+
 int main() {
     test_primitives();
     test_containers();
@@ -261,6 +302,7 @@ int main() {
     test_trait_objects();
     test_async();
     test_custom_types();
+    test_uniffi_032();
     std::printf("%d checks, %d failures\n", checks, failures);
     return failures == 0 ? 0 : 1;
 }

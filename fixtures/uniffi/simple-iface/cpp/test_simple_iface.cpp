@@ -1,4 +1,4 @@
-// Port of uniffi-rs v0.31.2 fixtures/simple-iface/tests/bindings/test_simple_iface.py
+// Port of uniffi-rs v0.32.2 fixtures/simple-iface/tests/bindings/test_simple_iface.py
 #include "check.hpp"
 #include "uniffi_simple_iface.hpp"
 

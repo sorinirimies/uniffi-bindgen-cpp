@@ -27,6 +27,7 @@
 #include <mutex>
 #include <optional>
 #include <ostream>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -324,6 +325,84 @@ struct Codec<std::map<K, V>> {
     }
 };
 
+template <class T>
+struct Codec<std::set<T>> {
+    static std::set<T> read(Reader& r) {
+        int32_t len = r.read_int<int32_t>();
+        if (len < 0) {
+            throw InternalError("negative set length");
+        }
+        std::set<T> out;
+        for (int32_t i = 0; i < len; ++i) {
+            out.insert(Codec<T>::read(r));
+        }
+        return out;
+    }
+    static void write(Writer& w, const std::set<T>& v) {
+        w.write_int<int32_t>(static_cast<int32_t>(v.size()));
+        for (const auto& item : v) {
+            Codec<T>::write(w, item);
+        }
+    }
+};
+
+/// A value behind a pointer, as `Box<T>` is in Rust: what lets a record or
+/// enum contain itself. Copies are deep, like C++26's `std::indirect`. A
+/// default-constructed or moved-from Box is empty, so recursive types can be
+/// default-constructed; reading an empty Box throws.
+template <class T>
+class Box {
+public:
+    Box() = default;
+    Box(T value) : ptr_(std::make_unique<T>(std::move(value))) {}  // NOLINT(google-explicit-constructor)
+    Box(const Box& other) : ptr_(other.ptr_ ? std::make_unique<T>(*other.ptr_) : nullptr) {}
+    Box(Box&&) noexcept = default;
+    Box& operator=(const Box& other) {
+        if (this != &other) {
+            ptr_ = other.ptr_ ? std::make_unique<T>(*other.ptr_) : nullptr;
+        }
+        return *this;
+    }
+    Box& operator=(Box&&) noexcept = default;
+    ~Box() = default;
+
+    bool has_value() const { return ptr_ != nullptr; }
+    T& operator*() { return value(); }
+    const T& operator*() const { return value(); }
+    T* operator->() { return &value(); }
+    const T* operator->() const { return &value(); }
+    T& value() {
+        if (!ptr_) {
+            throw InternalError("empty uniffi::Box");
+        }
+        return *ptr_;
+    }
+    const T& value() const {
+        if (!ptr_) {
+            throw InternalError("empty uniffi::Box");
+        }
+        return *ptr_;
+    }
+
+private:
+    std::unique_ptr<T> ptr_;
+};
+
+template <class T>
+struct Codec<Box<T>> {
+    static Box<T> read(Reader& r) { return Box<T>(Codec<T>::read(r)); }
+    static void write(Writer& w, const Box<T>& v) { Codec<T>::write(w, *v); }
+};
+
+/// Lends bytes to a Rust function taking `&[u8]`, without copying: valid for
+/// the duration of the call.
+inline ForeignBytes borrow_bytes(const std::vector<uint8_t>& bytes) {
+    if (bytes.size() > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
+        throw InternalError("byte slice too large to lend to Rust");
+    }
+    return ForeignBytes{static_cast<int32_t>(bytes.size()), bytes.data()};
+}
+
 /// A point in time with nanosecond resolution, relative to the Unix epoch.
 using Timestamp =
     std::chrono::time_point<std::chrono::system_clock, std::chrono::nanoseconds>;
@@ -492,6 +571,24 @@ bool equal(const std::vector<T>& a, const std::vector<T>& b) {
         }
     }
     return true;
+}
+
+template <class T>
+bool equal(const Box<T>& a, const Box<T>& b) {
+    if (a.has_value() != b.has_value()) {
+        return false;
+    }
+    return !a.has_value() || equal(*a, *b);
+}
+
+template <class T>
+bool operator==(const Box<T>& a, const Box<T>& b) {
+    return equal(a, b);
+}
+
+template <class T>
+bool operator!=(const Box<T>& a, const Box<T>& b) {
+    return !equal(a, b);
 }
 
 template <class K, class V>

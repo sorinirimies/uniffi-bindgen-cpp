@@ -1,4 +1,4 @@
-// Port of uniffi-rs v0.31.2 examples/arithmetic-procmacro/tests/test.py
+// Port of uniffi-rs v0.32.2 examples/arithmetic-procmacro/tests/test.py
 #include "arithmeticpm.hpp"
 #include "check.hpp"
 

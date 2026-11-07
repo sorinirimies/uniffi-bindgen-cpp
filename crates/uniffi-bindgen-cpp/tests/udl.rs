@@ -229,6 +229,20 @@ fn bytes_go_through_the_length_prefixed_codec() {
     assert!(!files.source.contains("lower_bytes") && !files.source.contains("lift_bytes"));
 }
 
+// uniffi 0.32 passes `[ByRef] bytes` (`&[u8]`) as `ForeignBytes`: lent, not copied.
+#[test]
+fn borrowed_bytes_are_lent_without_a_copy() {
+    let udl = "namespace lend { u32 checksum([ByRef] bytes data); };";
+    let files = generate_from_udl(udl, "lend", &Config::default()).expect("generate");
+    assert!(files.source.contains("uniffi::borrow_bytes(data)"));
+    assert!(
+        files
+            .header
+            .contains("uint32_t checksum(const std::vector<uint8_t>& data);")
+    );
+    assert!(compiles(&files), "generated code does not compile");
+}
+
 // Regression: a record holding an object used `Codec<std::shared_ptr<Obj>>` before
 // it was defined, which does not compile. Value codecs are now defined out of line,
 // after every codec class.

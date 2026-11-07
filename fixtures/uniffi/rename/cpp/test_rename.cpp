@@ -1,4 +1,4 @@
-// Port of uniffi-rs v0.31.2 fixtures/rename/tests/test_rename.py
+// Port of uniffi-rs v0.32.2 fixtures/rename/tests/test_rename.py
 // The [bindings.cpp.rename] section of uniffi.toml renames the "Binding" items.
 #include "check.hpp"
 #include "uniffi_fixture_rename.hpp"
@@ -8,12 +8,12 @@ using namespace uniffi_fixture_rename;
 int main() {
     // Renamed in Rust.
     RenamedRecord record{42};
-    CHECK_EQ(record.item, 42);
+    CHECK_EQ(record.renamed_field, 42);
     RenamedEnum variant{RenamedEnum::RenamedVariant{}};
     RenamedEnum with_record{RenamedEnum::Record{record}};
     CHECK(variant.is<RenamedEnum::RenamedVariant>());
-    CHECK_EQ(with_record.get_if<RenamedEnum::Record>()->v0.item, 42);
-    CHECK_EQ(renamed_function(record).get_if<RenamedEnum::Record>()->v0.item, 42);
+    CHECK_EQ(with_record.get_if<RenamedEnum::Record>()->v0.renamed_field, 42);
+    CHECK_EQ(renamed_function(record).get_if<RenamedEnum::Record>()->v0.renamed_field, 42);
     auto obj = RenamedObject::renamed_constructor(123);
     CHECK_EQ(obj->renamed_method(), 123);
     RenamedError_RenamedErrorVariant error;

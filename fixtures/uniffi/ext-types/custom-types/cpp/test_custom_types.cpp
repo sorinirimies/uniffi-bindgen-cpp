@@ -1,4 +1,4 @@
-// Port of uniffi-rs v0.31.2 fixtures/ext-types/custom-types/tests/bindings/test_custom_types.py
+// Port of uniffi-rs v0.32.2 fixtures/ext-types/custom-types/tests/bindings/test_custom_types.py
 #include "check.hpp"
 #include "ext_types_custom.hpp"
 

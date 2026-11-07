@@ -1,4 +1,4 @@
-// Port of uniffi-rs v0.31.2 fixtures/proc-macro/tests/bindings/test_proc_macro.py
+// Port of uniffi-rs v0.32.2 fixtures/proc-macro/tests/bindings/test_proc_macro.py
 #include <stdexcept>
 
 #include "check.hpp"
@@ -70,6 +70,9 @@ int main() {
     CHECK_EQ(make_zero().inner, "ZERO");
     CHECK(make_record_with_bytes().some_bytes == (std::vector<uint8_t>{0, 1, 2, 3, 4}));
     CHECK((make_hashmap(1, 2) == std::map<int8_t, uint64_t>{{1, 2}}));
+    CHECK((make_hash_set("hello") == std::set<std::string>{"hello"}));
+    std::set<std::string> s{"a", "b", "c"};
+    CHECK(return_hash_set(s) == s);
     std::map<int8_t, uint64_t> d{{1, 2}};
     CHECK(return_hashmap(d) == d);
     CHECK_EQ(join({"a", "b", "c"}, ":"), "a:b:c");
@@ -98,6 +101,7 @@ int main() {
     CHECK_EQ(implicit.adouble, 0.0);
     CHECK(implicit.vec.empty());
     CHECK(implicit.map.empty());
+    CHECK(implicit.set.empty());
     CHECK(implicit.some_bytes.empty());
     CHECK(!implicit.opt_int32.has_value());
     CHECK_EQ(implicit.custom_integer, 0);

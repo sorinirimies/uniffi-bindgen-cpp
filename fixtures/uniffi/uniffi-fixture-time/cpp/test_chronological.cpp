@@ -1,4 +1,4 @@
-// Port of uniffi-rs v0.31.2 fixtures/uniffi-fixture-time/tests/bindings/test_chronological.py
+// Port of uniffi-rs v0.32.2 fixtures/uniffi-fixture-time/tests/bindings/test_chronological.py
 #include "check.hpp"
 #include "chronological.hpp"
 

@@ -1,4 +1,4 @@
-// Port of uniffi-rs v0.31.2 examples/todolist/tests/bindings/test_todolist.py
+// Port of uniffi-rs v0.32.2 examples/todolist/tests/bindings/test_todolist.py
 #include "check.hpp"
 #include "todolist.hpp"
 

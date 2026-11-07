@@ -113,6 +113,8 @@ impl<'a> Gen<'a> {
             Type::Record { name, .. } | Type::Enum { name, .. } => self.named(t, name),
             Type::Optional { inner_type } => format!("std::optional<{}>", rec(inner_type)),
             Type::Sequence { inner_type } => format!("std::vector<{}>", rec(inner_type)),
+            Type::Set { inner_type } => format!("std::set<{}>", rec(inner_type)),
+            Type::Box { inner_type } => format!("uniffi::Box<{}>", rec(inner_type)),
             Type::Map {
                 key_type,
                 value_type,
@@ -299,7 +301,9 @@ impl<'a> Gen<'a> {
                 }
                 _ => return None,
             },
-            Literal::EmptySequence | Literal::EmptyMap => format!("{}{{}}", self.cpp_type(t)),
+            Literal::EmptySequence | Literal::EmptyMap | Literal::EmptySet => {
+                format!("{}{{}}", self.cpp_type(t))
+            }
             Literal::None => "std::nullopt".into(),
             Literal::Some { inner } => {
                 let inner_type = match t {

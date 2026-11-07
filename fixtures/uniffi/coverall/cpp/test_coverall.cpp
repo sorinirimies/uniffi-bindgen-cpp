@@ -1,4 +1,4 @@
-// Port of uniffi-rs v0.31.2 fixtures/coverall/tests/bindings/test_coverall.py
+// Port of uniffi-rs v0.32.2 fixtures/coverall/tests/bindings/test_coverall.py
 #include <algorithm>
 #include <cctype>
 #include <cmath>

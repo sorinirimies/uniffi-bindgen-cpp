@@ -1,4 +1,4 @@
-// Port of uniffi-rs v0.31.2 examples/arithmetic/tests/bindings/test_arithmetic.py
+// Port of uniffi-rs v0.32.2 examples/arithmetic/tests/bindings/test_arithmetic.py
 #include "arithmetic.hpp"
 #include "check.hpp"
 

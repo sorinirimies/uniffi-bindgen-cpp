@@ -1,4 +1,4 @@
-// Port of uniffi-rs v0.31.2 examples/custom-types/tests/bindings/test_custom_types.py
+// Port of uniffi-rs v0.32.2 examples/custom-types/tests/bindings/test_custom_types.py
 // The C++ section of uniffi.toml maps `TimeIntervalMs` to std::chrono::milliseconds.
 #include "check.hpp"
 #include "custom_types.hpp"

@@ -1,4 +1,4 @@
-// Port of uniffi-rs v0.31.2 fixtures/ext-types/http-headermap/tests/bindings/test_http_headermap.py
+// Port of uniffi-rs v0.32.2 fixtures/ext-types/http-headermap/tests/bindings/test_http_headermap.py
 #include "check.hpp"
 #include "ext_types_http_headermap.hpp"
 

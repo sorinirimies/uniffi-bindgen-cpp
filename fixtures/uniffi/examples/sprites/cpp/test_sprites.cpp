@@ -1,4 +1,4 @@
-// Port of uniffi-rs v0.31.2 examples/sprites/tests/bindings/test_sprites.py
+// Port of uniffi-rs v0.32.2 examples/sprites/tests/bindings/test_sprites.py
 #include "check.hpp"
 #include "sprites.hpp"
 

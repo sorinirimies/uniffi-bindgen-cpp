@@ -7,12 +7,18 @@ publish = false
 
 [lib]
 name = "uniffi_simple_iface"
-crate-type = ["lib", "cdylib"]
+crate-type = [
+    "lib",
+    "cdylib",
+]
 
 [dependencies]
-uniffi = { workspace = true }
 thiserror = "2"
 lazy_static = "1.4"
 
-[build-dependencies]
-uniffi = { workspace = true, features = ["build"] }
+[dependencies.uniffi]
+workspace = true
+
+[build-dependencies.uniffi]
+workspace = true
+features = ["build"]

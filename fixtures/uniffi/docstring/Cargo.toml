@@ -7,11 +7,17 @@ publish = false
 
 [lib]
 name = "uniffi_fixture_docstring"
-crate-type = ["lib", "cdylib"]
+crate-type = [
+    "lib",
+    "cdylib",
+]
 
 [dependencies]
 thiserror = "2"
-uniffi = { workspace = true }
 
-[build-dependencies]
-uniffi = { workspace = true, features = ["build"] }
+[dependencies.uniffi]
+workspace = true
+
+[build-dependencies.uniffi]
+features = ["build"]
+workspace = true

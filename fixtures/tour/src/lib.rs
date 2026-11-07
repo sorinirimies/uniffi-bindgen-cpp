@@ -1,6 +1,6 @@
 //! A tour of the UniFFI features the C++ bindings have to support.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
@@ -406,4 +406,80 @@ pub fn make_holder(start: i64) -> Holder {
 #[uniffi::export]
 pub fn echo_u64s(values: HashMap<String, Vec<u64>>) -> HashMap<String, Vec<u64>> {
     values
+}
+
+// uniffi 0.32: recursive types through `Box`, sets, and bytes lent without a copy.
+
+#[derive(Clone, Debug, PartialEq, uniffi::Enum)]
+pub enum Expr {
+    Num { value: i64 },
+    Add { left: Box<Expr>, right: Box<Expr> },
+    Neg { inner: Box<Expr> },
+}
+
+#[uniffi::export]
+pub fn eval(expr: Expr) -> i64 {
+    match expr {
+        Expr::Num { value } => value,
+        Expr::Add { left, right } => eval(*left) + eval(*right),
+        Expr::Neg { inner } => -eval(*inner),
+    }
+}
+
+#[uniffi::export]
+pub fn sum_expr(values: Vec<i64>) -> Expr {
+    values.into_iter().fold(Expr::Num { value: 0 }, |acc, value| Expr::Add {
+        left: Box::new(acc),
+        right: Box::new(Expr::Num { value }),
+    })
+}
+
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct TreeNode {
+    pub label: String,
+    pub children: Vec<TreeNode>,
+    pub first_sibling: Option<Box<TreeNode>>,
+}
+
+#[uniffi::export]
+pub fn count_nodes(node: TreeNode) -> u32 {
+    1 + node.children.into_iter().map(count_nodes).sum::<u32>()
+        + node.first_sibling.map_or(0, |sibling| count_nodes(*sibling))
+}
+
+#[uniffi::export]
+pub fn unique_words(text: String) -> HashSet<String> {
+    text.split_whitespace().map(str::to_owned).collect()
+}
+
+#[uniffi::export]
+pub fn set_sum(values: HashSet<u32>) -> u32 {
+    values.into_iter().sum()
+}
+
+#[uniffi::export]
+pub fn checksum(data: &[u8]) -> u32 {
+    data.iter().map(|&b| u32::from(b)).sum()
+}
+
+#[derive(uniffi::Object, Default)]
+pub struct Adler {
+    sum: Mutex<u32>,
+}
+
+#[uniffi::export]
+impl Adler {
+    #[uniffi::constructor]
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self::default())
+    }
+
+    pub fn update(&self, data: &[u8]) {
+        let mut sum = self.sum.lock().expect("lock");
+        *sum = data.iter().fold(*sum, |acc, &b| acc.wrapping_mul(31).wrapping_add(u32::from(b)));
+    }
+
+    pub fn value(&self) -> u32 {
+        *self.sum.lock().expect("lock")
+    }
 }

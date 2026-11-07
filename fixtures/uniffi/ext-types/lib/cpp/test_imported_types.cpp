@@ -1,4 +1,4 @@
-// Port of uniffi-rs v0.31.2 fixtures/ext-types/lib/tests/bindings/test_imported_types.py
+// Port of uniffi-rs v0.32.2 fixtures/ext-types/lib/tests/bindings/test_imported_types.py
 // One library, five components; each has its own header and namespace.
 #include "check.hpp"
 #include "ext_types_custom.hpp"

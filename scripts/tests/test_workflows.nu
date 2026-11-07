@@ -125,7 +125,7 @@ def "test workflows: every linux job that compiles installs the system packages 
 }
 
 def "test workflows: no shell or python scripts" [] {
-    let found = glob ((root) | path join "**" "*.{sh,bash,zsh,py}") --exclude [**/target/** **/.git/**]
+    let found = glob ((root) | path join "**" "*.{sh,bash,zsh,py}") --exclude [**/target/** **/.git/** build/**]
         | each {|f| $f | path expand | path relative-to (root | path expand) }
         | where {|f| $f not-in $SHELL_BOOTSTRAP }
     assert equal $found [] "scripting is Nushell only (a pre-nu installer goes in SHELL_BOOTSTRAP)"

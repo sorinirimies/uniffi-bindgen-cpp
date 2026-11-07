@@ -1,4 +1,4 @@
-// Port of uniffi-rs v0.31.2 fixtures/error-types/tests/bindings/test.py
+// Port of uniffi-rs v0.32.2 fixtures/error-types/tests/bindings/test.py
 #include <cstring>
 
 #include "check.hpp"

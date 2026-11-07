@@ -282,7 +282,7 @@ def "test fixtures: selection skips SKIP and honours --only" [] {
     assert equal (selected $libs "b" | get name) ["b"]
 }
 
-use ../ci/cmake_examples.nu [bindgen_path examples]
+use ../ci/cmake_examples.nu [bindgen_path examples generator_uniffi pin_uniffi]
 
 def "test cmake_examples: generator path per platform" [] {
     assert equal (bindgen_path "/r" "linux") "/r/target/debug/uniffi-bindgen-cpp"
@@ -313,4 +313,48 @@ def "test bench: optimized and linked to the fixture" [] {
     assert ("-O2" in $args)
     assert ("/o/benchmarks.cpp" in $args)
     assert ("-luniffi_benchmarks" in $args)
+}
+
+use ../vendor_fixtures.nu [local_dir local_path trim_manifest cpp_sections]
+
+def "test vendor_fixtures: fixtures move up a level, examples stay" [] {
+    assert equal (local_dir "fixtures/ext-types/lib") "ext-types/lib"
+    assert equal (local_dir "examples/geometry") "examples/geometry"
+}
+
+def "test vendor_fixtures: path dependencies follow the layout" [] {
+    assert equal (local_path "fixtures/ext-types/lib" "../../../examples/custom-types") "../../examples/custom-types"
+    assert equal (local_path "fixtures/ext-types/lib" "../uniffi-one") "../uniffi-one"
+    assert equal (local_path "examples/traits" "../../fixtures/futures") "../../futures"
+}
+
+def "test vendor_fixtures: manifests lose what the C++ tests do not need" [] {
+    let m = {
+        package: {name: "x"}
+        dependencies: {uniffi: {workspace: true}, one: {path: "../../../examples/a"}}
+        dev-dependencies: {uniffi: {workspace: true}}
+        bin: [{name: "b"}]
+        features: {ffi-trace: ["uniffi/ffi-trace"]}
+    }
+    let out = (trim_manifest $m "fixtures/ext-types/lib")
+    assert equal ($out | columns | sort) ["dependencies" "package"]
+    assert equal $out.dependencies.one.path "../../examples/a"
+    let repo = (trim_manifest {dependencies: {uniffi: {path: "../../uniffi", features: ["build"]}}} "fixtures/docstring")
+    assert equal $repo.dependencies.uniffi {features: ["build"], workspace: true}
+    let kept = (trim_manifest ($m | upsert features {default: ["f"], ffi-trace: []}) "fixtures/x")
+    assert equal $kept.features {default: ["f"]}
+}
+
+def "test vendor_fixtures: only the cpp sections of uniffi.toml" [] {
+    let text = "[bindings.kotlin]\na = 1\n\n# For C++.\n[bindings.cpp.rename]\nx = \"y\"\n[bindings.swift]\nb = 2\n"
+    assert equal (cpp_sections $text) "# For C++.\n[bindings.cpp.rename]\nx = \"y\""
+    assert equal (cpp_sections "[bindings.kotlin]\n") ""
+}
+
+def "test cmake_examples: stem-mqtt follows the uniffi of the generator" [] {
+    assert equal (generator_uniffi {workspace: {dependencies: {uniffi_bindgen: "0.32"}}}) "0.32"
+    let manifest = "[workspace.dependencies]\nuniffi     = { version = \"0.31\", features = [\"tokio\"] }\nuniffi_x = \"1\"\n"
+    let pinned = (pin_uniffi $manifest "0.32")
+    assert ($pinned | str contains 'uniffi     = { version = "0.32", features = ["tokio"] }')
+    assert ($pinned | str contains 'uniffi_x = "1"')
 }

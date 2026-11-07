@@ -1,4 +1,4 @@
-// Port of uniffi-rs v0.31.2 fixtures/type-limits/tests/bindings/test_type_limits.py
+// Port of uniffi-rs v0.32.2 fixtures/type-limits/tests/bindings/test_type_limits.py
 // Out-of-range and wrongly typed arguments are compile errors in C++, so only the
 // limits themselves, special floats, strings and bytes are checked at run time.
 #include <cmath>

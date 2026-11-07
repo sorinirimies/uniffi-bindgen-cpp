@@ -1,4 +1,4 @@
-// Port of uniffi-rs v0.31.2 examples/futures/tests/bindings/test.py
+// Port of uniffi-rs v0.32.2 examples/futures/tests/bindings/test.py
 #include "check.hpp"
 #include "uniffi_example_futures.hpp"
 

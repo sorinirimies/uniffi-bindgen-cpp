@@ -1,4 +1,4 @@
-// Port of uniffi-rs v0.31.2 fixtures/callbacks/tests/bindings/test_callbacks.py
+// Port of uniffi-rs v0.32.2 fixtures/callbacks/tests/bindings/test_callbacks.py
 #include <algorithm>
 #include <cctype>
 #include <stdexcept>

@@ -7,11 +7,17 @@ publish = false
 
 [lib]
 name = "uniffi_unary_result_alias"
-crate-type = ["lib", "cdylib"]
+crate-type = [
+    "lib",
+    "cdylib",
+]
 
 [dependencies]
-uniffi = { workspace = true }
 thiserror = "2"
 
-[build-dependencies]
-uniffi = { workspace = true, features = ["build"] }
+[dependencies.uniffi]
+workspace = true
+
+[build-dependencies.uniffi]
+workspace = true
+features = ["build"]

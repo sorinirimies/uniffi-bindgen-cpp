@@ -1,4 +1,4 @@
-// Port of uniffi-rs v0.31.2 fixtures/trait-methods/tests/bindings/test.py
+// Port of uniffi-rs v0.32.2 fixtures/trait-methods/tests/bindings/test.py
 #include <sstream>
 #include <unordered_set>
 

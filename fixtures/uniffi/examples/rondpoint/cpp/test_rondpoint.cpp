@@ -1,4 +1,4 @@
-// Port of uniffi-rs v0.31.2 examples/rondpoint/tests/bindings/test_rondpoint.py
+// Port of uniffi-rs v0.32.2 examples/rondpoint/tests/bindings/test_rondpoint.py
 #include <cfloat>
 #include <cstdint>
 #include <limits>

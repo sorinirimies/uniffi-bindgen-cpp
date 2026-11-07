@@ -1,21 +1,23 @@
-# uniffi-rs v0.31.2 test fixtures and examples (MPL-2.0,
-# https://github.com/mozilla/uniffi-rs/tree/v0.31.2),
-# vendored to run their tests against the C++ bindings. Each fixture's
-# `cpp/test_*.cpp` ports the upstream Python test named at its top.
-# Changes from upstream: the test harness and the per-language tests,
-# dev-dependencies, the ffi-trace feature, examples and binaries are removed.
+# uniffi-rs v0.32.2 test fixtures and examples (MPL-2.0,
+# https://github.com/mozilla/uniffi-rs/tree/v0.32.2),
+# vendored by scripts/vendor_fixtures.nu to run their tests against the C++
+# bindings. Each fixture's `cpp/test_*.cpp` ports the upstream test named at
+# its top. Changes from upstream: the test harness and the per-language
+# tests, dev-dependencies, the ffi-trace feature, benches and binaries are
+# removed.
+# Kept from an earlier uniffi-rs version (no longer upstream): keywords/kotlin, keywords/swift, regressions/kotlin-enum-payload-clash, regressions/kotlin-experimental-unsigned-types, regressions/swift-callbacks-omit-labels, regressions/swift-dictionary-nesting.
 [workspace]
 resolver = "2"
 members = [
     "benchmarks",
     "callbacks",
     "coverall",
-    "docstring-proc-macro",
     "docstring",
+    "docstring-proc-macro",
     "enum-types",
     "error-types",
-    "examples/arithmetic-procmacro",
     "examples/arithmetic",
+    "examples/arithmetic-procmacro",
     "examples/async-api-client",
     "examples/callbacks",
     "examples/custom-types",
@@ -34,13 +36,15 @@ members = [
     "ext-types/sub-lib",
     "ext-types/uniffi-one",
     "futures",
+    "gh-2600",
     "keywords/kotlin",
     "keywords/rust",
     "keywords/swift",
     "large-enum",
     "large-error",
-    "proc-macro-no-implicit-prelude",
+    "mutable-records",
     "proc-macro",
+    "proc-macro-no-implicit-prelude",
     "regressions/cdylib-crate-type-dependency/cdylib-dependency",
     "regressions/cdylib-crate-type-dependency/ffi-crate",
     "regressions/enum-without-i32-helpers",
@@ -63,4 +67,4 @@ members = [
 ]
 
 [workspace.dependencies]
-uniffi = "=0.31.2"
+uniffi = "=0.32.2"

@@ -1,4 +1,4 @@
-// Port of uniffi-rs v0.31.2 fixtures/keywords/rust/tests/bindings/test_keywords.py
+// Port of uniffi-rs v0.32.2 fixtures/keywords/rust/tests/bindings/test_keywords.py
 // Every name in this fixture is a keyword somewhere; C++ ones get a trailing `_`.
 #include "check.hpp"
 #include "keywords_rust.hpp"

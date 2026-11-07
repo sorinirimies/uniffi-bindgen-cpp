@@ -1,4 +1,4 @@
-// Port of uniffi-rs v0.31.2 fixtures/regressions/logging-callback-interface/tests/bindings/test.py
+// Port of uniffi-rs v0.32.2 fixtures/regressions/logging-callback-interface/tests/bindings/test.py
 #include <algorithm>
 #include <mutex>
 #include <vector>

@@ -5,9 +5,14 @@ edition = "2021"
 publish = false
 
 [lib]
-crate-type = ["lib", "cdylib"]
+crate-type = [
+    "lib",
+    "cdylib",
+]
 name = "uniffi_keywords_rust"
 
 [dependencies]
 thiserror = "2"
-uniffi = { workspace = true }
+
+[dependencies.uniffi]
+workspace = true

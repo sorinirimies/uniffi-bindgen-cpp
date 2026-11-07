@@ -1,4 +1,4 @@
-// Port of uniffi-rs v0.31.2 fixtures/benchmarks/benches/bindings/run_benchmarks.py:
+// Port of uniffi-rs v0.32.2 fixtures/benchmarks/benches/bindings/run_benchmarks.py:
 // Rust's Criterion measures calls in both directions; the arguments of this
 // program are Criterion's (a name filter, --save-baseline, ...).
 #include <chrono>
@@ -18,6 +18,36 @@ const TestEnum ENUM2{TestEnum::Two{1.5}};
 const std::vector<uint32_t> VEC1{0, 1};
 const std::vector<uint32_t> VEC2{2, 4, 6};
 const std::map<uint32_t, uint32_t> MAP1{{0, 1}, {1, 2}};
+const TestLargeRecord LARGE_REC1{1, 2, 3, 4, 1.0f, 2.0, true};
+const TestLargeRecord LARGE_REC2{-1, -2, -3, -4, -1.0f, -2.0, false};
+
+std::vector<uint8_t> all_bytes() {
+    std::vector<uint8_t> out(256);
+    for (size_t i = 0; i < out.size(); ++i) {
+        out[i] = static_cast<uint8_t>(i);
+    }
+    return out;
+}
+
+std::vector<uint32_t> primitive_list() {
+    std::vector<uint32_t> out(1024);
+    for (uint32_t i = 0; i < out.size(); ++i) {
+        out[i] = i;
+    }
+    return out;
+}
+
+std::vector<TestRecord> record_list() {
+    std::vector<TestRecord> out;
+    for (int32_t i = 0; i < 1024; ++i) {
+        out.push_back(TestRecord{i, static_cast<uint64_t>(i) * 2, static_cast<double>(i) / 2.0});
+    }
+    return out;
+}
+
+const std::vector<uint8_t> BYTES = all_bytes();
+const std::vector<uint32_t> PRIMITIVE_LIST = primitive_list();
+const std::vector<TestRecord> RECORD_LIST = record_list();
 const std::map<uint32_t, uint32_t> MAP2{{2, 4}};
 
 NestedData nested(int which) {
@@ -53,8 +83,26 @@ public:
     TestRecord records(const TestRecord& a, const TestRecord& b) override {
         return TestRecord{a.a + b.a, a.b + b.b, a.c + b.c};
     }
+    TestLargeRecord large_records(const TestLargeRecord& a, const TestLargeRecord& b) override {
+        return TestLargeRecord{static_cast<int8_t>(a.a + b.a), static_cast<int16_t>(a.b + b.b), a.c + b.c, a.d + b.d,
+                               a.e + b.e, a.f + b.f, a.g || b.g};
+    }
     TestEnum enums(const TestEnum& a, const TestEnum& b) override { return TestEnum{TestEnum::Two{sum(a) + sum(b)}}; }
-    std::vector<uint32_t> vecs(const std::vector<uint32_t>& a, const std::vector<uint32_t>& b) override {
+    uint32_t optionals(const std::optional<uint32_t>& a, const std::optional<bool>& b,
+                       const std::optional<std::string>& c) override {
+        uint32_t sum = a.value_or(0);
+        if (b == true) {
+            sum *= 2;
+        }
+        if (c) {
+            sum += static_cast<uint32_t>(c->size());
+        }
+        return sum;
+    }
+    std::vector<uint8_t> bytes(const std::vector<uint8_t>& v) override { return v; }
+    std::vector<uint32_t> vec_primitives(const std::vector<uint32_t>& v) override { return v; }
+    std::vector<TestRecord> vec_records(const std::vector<TestRecord>& v) override { return v; }
+    std::vector<uint32_t> vec_small(const std::vector<uint32_t>& a, const std::vector<uint32_t>& b) override {
         auto out = a;
         out.insert(out.end(), b.begin(), b.end());
         return out;
@@ -95,8 +143,14 @@ public:
                 case TestCase::Strings: (void)test_case_strings("a", "b"); break;
                 case TestCase::LargeStrings: (void)test_case_large_strings(LARGE_STRING_1, LARGE_STRING_2); break;
                 case TestCase::Records: (void)test_case_records(REC1, REC2); break;
+                case TestCase::LargeRecords: (void)test_case_large_records(LARGE_REC1, LARGE_REC2); break;
                 case TestCase::Enums: (void)test_case_enums(ENUM1, ENUM2); break;
-                case TestCase::Vecs: (void)test_case_vecs(VEC1, VEC2); break;
+                case TestCase::Optionals: (void)test_case_optionals(10, std::nullopt, std::string("testing-123")); break;
+                case TestCase::Bytes: (void)test_case_bytes(BYTES); break;
+                case TestCase::VecSmall: (void)test_case_vec_small(VEC1, VEC2); break;
+                case TestCase::VecPrimitives: (void)test_case_vec_primitives(PRIMITIVE_LIST); break;
+                case TestCase::VecRecords: (void)test_case_vec_records(RECORD_LIST); break;
+                case TestCase::Methods: interface1_->noop_method(); break;
                 case TestCase::Hashmaps: (void)test_case_hashmaps(MAP1, MAP2); break;
                 case TestCase::Interfaces: (void)test_case_interfaces(interface1_, interface2_); break;
                 case TestCase::TraitInterfaces: (void)test_case_trait_interfaces(trait1_, trait2_); break;

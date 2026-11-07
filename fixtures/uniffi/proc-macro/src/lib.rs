@@ -2,7 +2,10 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 mod callback_interface;
 
@@ -186,6 +189,16 @@ fn return_hashmap(h: HashMap<i8, u64>) -> HashMap<i8, u64> {
 }
 
 #[uniffi::export]
+fn make_hash_set(v: String) -> HashSet<String> {
+    HashSet::from([v])
+}
+
+#[uniffi::export]
+fn return_hash_set(h: HashSet<String>) -> HashSet<String> {
+    h
+}
+
+#[uniffi::export]
 fn take_record_with_bytes(rwb: RecordWithBytes) -> Vec<u8> {
     rwb.some_bytes
 }
@@ -279,7 +292,9 @@ fn get_mixed_enum(v: Option<MixedEnum>) -> MixedEnum {
 #[derive(uniffi::Enum)]
 pub enum ReprU8 {
     One = 1,
+    // Two is reserved to check enum value skipping
     Three = 0x3,
+    Four = 4u8,
 }
 
 #[uniffi::export]
@@ -468,6 +483,8 @@ pub struct RecordWithImplicitDefaults {
     vec: Vec<bool>,
     #[uniffi(default)]
     map: HashMap<String, String>,
+    #[uniffi(default)]
+    set: HashSet<String>,
     #[uniffi(default)]
     some_bytes: Vec<u8>,
     #[uniffi(default)]

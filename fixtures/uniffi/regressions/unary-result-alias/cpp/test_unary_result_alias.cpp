@@ -1,4 +1,4 @@
-// Port of uniffi-rs v0.31.2 fixtures/regressions/unary-result-alias/tests/bindings/test.py
+// Port of uniffi-rs v0.32.2 fixtures/regressions/unary-result-alias/tests/bindings/test.py
 #include "check.hpp"
 #include "unary_result_alias.hpp"
 

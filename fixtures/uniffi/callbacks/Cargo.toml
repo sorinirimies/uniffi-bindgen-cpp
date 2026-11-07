@@ -6,13 +6,19 @@ license = "MPL-2.0"
 publish = false
 
 [lib]
-crate-type = ["lib", "cdylib"]
+crate-type = [
+    "lib",
+    "cdylib",
+]
 name = "uniffi_fixture_callbacks"
 
 [dependencies]
-# Add the "scaffolding-ffi-buffer-fns" feature to make sure things can build correctly
-uniffi = { workspace = true, features=["scaffolding-ffi-buffer-fns"] }
 thiserror = "2"
 
-[build-dependencies]
-uniffi = { workspace = true, features = ["build"] }
+[dependencies.uniffi]
+workspace = true
+features = ["scaffolding-ffi-buffer-fns"]
+
+[build-dependencies.uniffi]
+workspace = true
+features = ["build"]

@@ -1,4 +1,4 @@
-// Port of uniffi-rs v0.31.2 fixtures/struct-default-values/tests/bindings/test_struct_default_values.py
+// Port of uniffi-rs v0.32.2 fixtures/struct-default-values/tests/bindings/test_struct_default_values.py
 #include "check.hpp"
 #include "struct_default_values.hpp"
 

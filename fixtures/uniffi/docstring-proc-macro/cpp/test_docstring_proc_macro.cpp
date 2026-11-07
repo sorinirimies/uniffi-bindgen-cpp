@@ -1,4 +1,4 @@
-// Port of uniffi-rs v0.31.2 fixtures/docstring-proc-macro/tests/bindings/test_docstring.py
+// Port of uniffi-rs v0.32.2 fixtures/docstring-proc-macro/tests/bindings/test_docstring.py
 // C++ has no run-time docstrings, so this checks the generated header's comments.
 #include <fstream>
 #include <sstream>
@@ -19,7 +19,7 @@ int main() {
              "<docstring-associated-error-variant>", "<docstring-object>",
              "<docstring-primary-constructor>", "<docstring-alternate-constructor>", "<docstring-method>",
              "<docstring-record>", "<docstring-record-field>", "<docstring-callback>",
-             "<docstring-callback-method>",
+             "<docstring-callback-method>", "<docstring-custom-newtype>", "<docstring-custom-type>",
          }) {
         CHECK(header.find(std::string("/// ") + doc) != std::string::npos);
         if (header.find(doc) == std::string::npos) {

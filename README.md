@@ -5,7 +5,7 @@
 [![Fuzz](https://github.com/sorinirimies/uniffi-bindgen-cpp/actions/workflows/fuzz.yml/badge.svg)](https://github.com/sorinirimies/uniffi-bindgen-cpp/actions/workflows/fuzz.yml)
 [![crates.io](https://img.shields.io/crates/v/uniffi-bindgen-cpp.svg)](https://crates.io/crates/uniffi-bindgen-cpp)
 
-C++17 bindings generator for [UniFFI](https://mozilla.github.io/uniffi-rs/) 0.31.
+C++17 bindings generator for [UniFFI](https://mozilla.github.io/uniffi-rs/) 0.32.
 
 Point it at a library built with UniFFI and it writes a header and a source file per
 component, plus one shared runtime header. The generated code calls the scaffolding
@@ -19,7 +19,7 @@ through its C ABI, so you link the Rust library like any other native library.
   with `then()`, or `co_await`ed in C++20; continuations run on your event loop if you
   want. Async callback methods are completed with `uniffi::Promise<T>`.
 * **Plain C++ types:** structs, `enum class`, `std::variant`, `std::optional`,
-  `std::vector`, `std::map`, `std::shared_ptr`, exceptions; `==`, `<`, `std::hash`
+  `std::vector`, `std::map`, `std::set`, `std::shared_ptr`, exceptions; `==`, `<`, `std::hash`
   and `operator<<` where Rust exports them.
 * **Builds with CMake:** one call builds the crate with cargo, another generates and
   compiles its bindings.
@@ -38,7 +38,11 @@ or download the archive for your platform from the
 
 | uniffi-bindgen-cpp | UniFFI |
 |---|---|
-| 0.1, 0.2 | 0.31 |
+| 0.2 | 0.32 |
+| 0.1 | 0.31 |
+
+A UniFFI minor version can change the FFI (0.32 passes `&[u8]` differently), so use the
+release that matches the `uniffi` version of the Rust library.
 
 ## Use
 
@@ -106,10 +110,12 @@ int main() {
 |---|---|
 | `u8`…`u64`, `i8`…`i64`, `f32`, `f64`, `bool` | `uint8_t`…`int64_t`, `float`, `double`, `bool` |
 | `String` | `std::string` (Rust rejects invalid UTF-8 with an error) |
-| `Vec<u8>` / bytes | `std::vector<uint8_t>` |
+| `Vec<u8>` / bytes | `std::vector<uint8_t>`; lent to Rust without a copy for `&[u8]` arguments |
 | `Vec<T>` | `std::vector<T>` |
 | `Option<T>` | `std::optional<T>` |
 | `HashMap<K, V>` | `std::map<K, V>` |
+| `HashSet<T>` | `std::set<T>` |
+| `Box<T>` | `uniffi::Box<T>`: a deep-copying pointer, which lets records and enums contain themselves |
 | `SystemTime` | `uniffi::Timestamp` (nanosecond `std::chrono::time_point`) |
 | `Duration` | `uniffi::Duration` (`std::chrono::nanoseconds`) |
 | record | `struct` with the fields in order; fields take their default or are value-initialized |
@@ -211,6 +217,10 @@ Record = "CppRecord"
   configured for it.
 * The runtime header must come from the same release for all bindings in one program.
 * A custom type mapped to the same C++ type in two components defines its codec twice.
+* `HashSet<T>` is a `std::set<T>`, so `T` needs `<`: numbers, strings, enums without
+  data, and records or enums that export `Ord`.
+* uniffi does not support `&[u8]` arguments in async functions or in methods of traits
+  implemented in C++.
 
 ## Development
 
@@ -232,7 +242,7 @@ Layout:
 ```
 crates/uniffi-bindgen-cpp/   the crate: codegen/ (the generator), runtime/ (the C++ runtime header), cli, config; tests/
 fixtures/tour/    a UniFFI crate that uses every feature, with the C++ test that runs against it (just e2e)
-fixtures/uniffi/  uniffi-rs v0.31.2 fixtures and examples, each with its C++ test in cpp/ (just fixtures)
+fixtures/uniffi/  uniffi-rs v0.32.2 fixtures and examples (scripts/vendor_fixtures.nu), each with its C++ test in cpp/ (just fixtures)
 examples/         CMake projects: the tour crate, and stem-mqtt's broker and client (just cmake)
 fuzz/             cargo-fuzz targets (nightly), one per parser/decoder
 scripts/          all tooling, Nushell only (justfile recipes run in nu too):

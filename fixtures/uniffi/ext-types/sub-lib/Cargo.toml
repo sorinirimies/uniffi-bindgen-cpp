@@ -6,18 +6,24 @@ license = "MPL-2.0"
 publish = false
 
 [package.metadata.uniffi.testing]
-external-crates = [
-    "uniffi-fixture-ext-types-lib-one",
-]
+external-crates = ["uniffi-fixture-ext-types-lib-one"]
 
 [lib]
-crate-type = ["lib", "cdylib"]
+crate-type = [
+    "lib",
+    "cdylib",
+]
 name = "uniffi_sublib"
 
 [dependencies]
 anyhow = "1"
-uniffi = { workspace = true }
-uniffi-fixture-ext-types-lib-one = {path = "../uniffi-one"}
 
-[build-dependencies]
-uniffi = { workspace = true, features = ["build"] }
+[dependencies.uniffi]
+workspace = true
+
+[dependencies.uniffi-fixture-ext-types-lib-one]
+path = "../uniffi-one"
+
+[build-dependencies.uniffi]
+workspace = true
+features = ["build"]

@@ -1,4 +1,4 @@
-// Port of uniffi-rs v0.31.2 fixtures/futures/tests/bindings/test_futures.py
+// Port of uniffi-rs v0.32.2 fixtures/futures/tests/bindings/test_futures.py
 #include <atomic>
 #include <chrono>
 #include <thread>
@@ -114,6 +114,12 @@ int main() {
         CHECK_EQ(traits[1]->say_after(100, "Bob").get(), "Hello, Bob!");
         CHECK(seconds_since(t0) >= 0.2);
     }
+    // ... on a Tokio runtime (uniffi 0.32).
+    auto tokio_traits = get_say_after_tokio_traits();
+    t0 = steady_clock::now();
+    CHECK_EQ(tokio_traits[0]->say_after(100, "Alice").get(), "Hello, Alice (with Tokio)!");
+    CHECK_EQ(tokio_traits[1]->say_after(100, "Bob").get(), "Hello, Bob (with Tokio)!");
+    CHECK(seconds_since(t0) >= 0.2);
     auto udl_traits = get_say_after_udl_traits();
     CHECK_EQ(udl_traits[0]->say_after(100, "Alice").get(), "Hello, Alice!");
     CHECK_EQ(udl_traits[1]->say_after(100, "Bob").get(), "Hello, Bob!");

@@ -1,4 +1,4 @@
-// Port of uniffi-rs v0.31.2 fixtures/enum-types/tests/bindings/test_enum_types.py
+// Port of uniffi-rs v0.32.2 fixtures/enum-types/tests/bindings/test_enum_types.py
 #include "check.hpp"
 #include "enum_types.hpp"
 
@@ -38,5 +38,13 @@ int main() {
     CHECK_EQ(i.e, 1);
     NamedEnumWithDefaults e{NamedEnumWithDefaults::I{0, 2}};
     CHECK_EQ(e.get_if<NamedEnumWithDefaults::I>()->e, 2);
+
+    // Boxed variants and records (uniffi 0.32).
+    auto boxed = create_boxed_enum("hello");
+    CHECK(boxed.is<EnumWithBoxedVariant::Boxed>());
+    CHECK_EQ(get_boxed_enum_value(boxed), "hello");
+    EnumWithBoxedVariant empty{EnumWithBoxedVariant::Empty{}};
+    CHECK_EQ(get_boxed_enum_value(empty), "empty");
+    CHECK_EQ(roundtrip_boxed_record(BoxedContent{"world"})->value, "world");
     return check::report();
 }

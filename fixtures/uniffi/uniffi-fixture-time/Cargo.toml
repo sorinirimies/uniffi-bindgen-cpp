@@ -6,13 +6,26 @@ license = "MPL-2.0"
 publish = false
 
 [lib]
-crate-type = ["lib", "cdylib"]
+crate-type = [
+    "lib",
+    "cdylib",
+]
 name = "uniffi_chronological"
 
 [dependencies]
-uniffi = { workspace = true }
 thiserror = "2"
-chrono = { version = "0.4.23", default-features = false, features = ["alloc", "std"] }
 
-[build-dependencies]
-uniffi = { workspace = true, features = ["build"] }
+[dependencies.uniffi]
+workspace = true
+
+[dependencies.chrono]
+version = "0.4.23"
+default-features = false
+features = [
+    "alloc",
+    "std",
+]
+
+[build-dependencies.uniffi]
+workspace = true
+features = ["build"]

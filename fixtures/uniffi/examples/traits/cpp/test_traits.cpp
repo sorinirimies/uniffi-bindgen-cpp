@@ -1,4 +1,4 @@
-// Port of uniffi-rs v0.31.2 examples/traits/tests/bindings/test_traits.py
+// Port of uniffi-rs v0.32.2 examples/traits/tests/bindings/test_traits.py
 #include "check.hpp"
 #include "traits.hpp"
 

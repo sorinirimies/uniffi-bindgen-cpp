@@ -1,4 +1,4 @@
-// Port of uniffi-rs v0.31.2 examples/geometry/tests/bindings/test_geometry.py
+// Port of uniffi-rs v0.32.2 examples/geometry/tests/bindings/test_geometry.py
 #include "check.hpp"
 #include "geometry.hpp"
 
