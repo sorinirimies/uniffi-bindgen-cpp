@@ -90,13 +90,14 @@ int main() {
     CHECK_EQ(say_after(200, "Bob").get(), "Hello, Bob!");
     CHECK(seconds_since(t0) >= 0.3);
 
-    // Concurrent: both run at once.
+    // Concurrent: both run at once, so together they take 0.4s, not 0.6s (the
+    // margin is for slow CI machines).
     t0 = steady_clock::now();
-    auto alice = say_after(100, "Alice");
-    auto bob = say_after(200, "Bob");
+    auto alice = say_after(200, "Alice");
+    auto bob = say_after(400, "Bob");
     CHECK_EQ(alice.get(), "Hello, Alice!");
     CHECK_EQ(bob.get(), "Hello, Bob!");
-    CHECK(seconds_since(t0) >= 0.2 && seconds_since(t0) < 0.3);
+    CHECK(seconds_since(t0) >= 0.4 && seconds_since(t0) < 0.58);
 
     // Methods and constructors.
     auto megaphone = new_megaphone();
