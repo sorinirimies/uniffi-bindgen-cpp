@@ -59,7 +59,8 @@ def run_library [lib: record, bin: string, lib_dir: string, out_root: string, co
     let check_dir = ($env.FILE_PWD | path dirname | path dirname | path join $FIXTURES cpp)
     for test in (glob $"($lib.dir)/cpp/test_*.cpp") {
         let exe = ($out | path join ($test | path parse | get stem))
-        let r = (do { ^$compiler ...$flags $test ...$objects $"-I($out)" $"-DUNIFFI_GENERATED_DIR=\"($out)\"" $"-I($check_dir)" ...(cxx link_args $lib_dir $lib.name) -o $exe } | complete)
+        let test_flags = (cxx test_flags $test $sanitize)
+        let r = (do { ^$compiler ...$test_flags $test ...$objects $"-I($out)" $"-DUNIFFI_GENERATED_DIR=\"($out)\"" $"-I($check_dir)" ...(cxx link_args $lib_dir $lib.name) -o $exe } | complete)
         if $r.exit_code != 0 {
             $failures = ($failures | append {library: $lib.name, step: $"build ($test | path basename)", detail: $r.stderr})
             continue

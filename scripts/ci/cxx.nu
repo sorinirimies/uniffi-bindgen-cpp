@@ -24,6 +24,16 @@ export def flags [sanitize: bool] {
     ["-std=c++17" "-Wall" "-Wextra" "-Werror" "-g" ...$sanitizers]
 }
 
+# `flags` for a test file: `*_cxx20.cpp` tests are C++20 (coroutines).
+export def test_flags [test: string, sanitize: bool] {
+    let base = (flags $sanitize)
+    if ($test | str ends-with "_cxx20.cpp") {
+        $base | each { |f| if $f == "-std=c++17" { "-std=c++20" } else { $f } }
+    } else {
+        $base
+    }
+}
+
 # Linker arguments for the Rust library `name` in `dir`.
 export def link_args [dir: string, name: string] {
     [$"-L($dir)" $"-l($name)" $"-Wl,-rpath,($dir)"]

@@ -419,7 +419,7 @@ impl Gen<'_> {
             .return_type()
             .map_or_else(|| "void".to_owned(), |t| self.cpp_type(t));
         if c.is_async() {
-            format!("std::future<{ret}>")
+            format!("uniffi::Future<{ret}>")
         } else {
             ret
         }

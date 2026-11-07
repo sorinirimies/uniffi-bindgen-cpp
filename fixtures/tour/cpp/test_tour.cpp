@@ -215,11 +215,11 @@ static void test_trait_objects() {
 
 class CppSource : public tour::AsyncSource {
 public:
-    std::future<std::string> fetch(const std::string& key) override {
-        return std::async(std::launch::async, [key] {
+    uniffi::Future<std::string> fetch(const std::string& key) override {
+        return uniffi::Future<std::string>::from(std::async(std::launch::async, [key] {
             std::this_thread::sleep_for(20ms);
             return "fetched " + key;
-        });
+        }));
     }
 };
 
@@ -233,7 +233,7 @@ static void test_async() {
     CHECK(worker->work(3).get() == "w did 3");
 
     // Many at once.
-    std::vector<std::future<int32_t>> futures;
+    std::vector<uniffi::Future<int32_t>> futures;
     for (int i = 0; i < 50; ++i) {
         futures.push_back(tour::slow_add(i, i));
     }

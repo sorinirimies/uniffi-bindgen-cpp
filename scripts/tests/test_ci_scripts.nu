@@ -256,6 +256,12 @@ def "test cxx: flags make warnings errors and add sanitizers on request" [] {
     assert ("-fsanitize=address,undefined" in (cxx flags true))
 }
 
+def "test cxx: C++20 tests by file name" [] {
+    assert ("-std=c++20" in (cxx test_flags "a/test_x_cxx20.cpp" false))
+    assert not ("-std=c++17" in (cxx test_flags "a/test_x_cxx20.cpp" false))
+    assert ("-std=c++17" in (cxx test_flags "a/test_x.cpp" false))
+}
+
 def "test cpp_e2e: compile arguments" [] {
     let args = (compile_args "/o" "/l" "/o/t" false)
     assert ("/o/tour.cpp" in $args)

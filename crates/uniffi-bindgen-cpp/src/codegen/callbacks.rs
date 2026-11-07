@@ -111,16 +111,16 @@ impl Gen<'_> {
             .map_or_else(|| "void".to_owned(), |t| self.cpp_type(t));
         let (get, store) = match m.return_type() {
             Some(t) => (
-                "auto value = pending->get();".to_owned(),
+                "auto value = done.get();".to_owned(),
                 format!(
                     "\n            result.return_value = {};",
                     self.lower(t, "value")
                 ),
             ),
-            None => ("pending->get();".to_owned(), String::new()),
+            None => ("done.get();".to_owned(), String::new()),
         };
         format!(
-            "void cb_{name}_m{i}({params}) {{\n    uniffi_out_dropped_callback->handle = 0;\n    uniffi_out_dropped_callback->free = &foreign_future_dropped;\n    std::shared_ptr<std::future<{ret_cpp}>> pending;\n    try {{\n        auto object = handle_map_{name}().get(uniffi_handle);\n        pending = std::make_shared<std::future<{ret_cpp}>>(object->{method}({args}));\n    }} catch (const std::exception& error) {{\n        ffi::{result_struct} result{{}};\n        result.call_status.code = uniffi::CALL_UNEXPECTED_ERROR;\n        result.call_status.error_buf = uniffi_detail::lower_string(error.what());\n        uniffi_future_callback(uniffi_callback_data, result);\n        return;\n    }}\n    uniffi::detail::spawn([pending, uniffi_future_callback, uniffi_callback_data] {{\n        ffi::{result_struct} result{{}};\n        try {{\n            {get}{store}\n{catches}        }}\n        uniffi_future_callback(uniffi_callback_data, result);\n    }});\n}}\n\n",
+            "void cb_{name}_m{i}({params}) {{\n    uniffi_out_dropped_callback->handle = 0;\n    uniffi_out_dropped_callback->free = &foreign_future_dropped;\n    uniffi::Future<{ret_cpp}> pending;\n    try {{\n        auto object = handle_map_{name}().get(uniffi_handle);\n        pending = object->{method}({args});\n        if (!pending.valid()) {{\n            throw uniffi::InternalError(\"an async callback returned an empty future\");\n        }}\n    }} catch (const std::exception& error) {{\n        ffi::{result_struct} result{{}};\n        result.call_status.code = uniffi::CALL_UNEXPECTED_ERROR;\n        result.call_status.error_buf = uniffi_detail::lower_string(error.what());\n        uniffi_future_callback(uniffi_callback_data, result);\n        return;\n    }}\n    // Rust drops the future when it no longer wants the result: cancel the C++ side.\n    auto state = pending.uniffi_state();\n    uniffi_out_dropped_callback->handle = foreign_futures().insert([state] {{ state->request_cancel(); }});\n    pending.then([uniffi_future_callback, uniffi_callback_data](uniffi::Future<{ret_cpp}> done) {{\n        ffi::{result_struct} result{{}};\n        try {{\n            {get}{store}\n{catches}        }}\n        uniffi_future_callback(uniffi_callback_data, result);\n    }});\n}}\n\n",
             params = self.vtable_params(callback, m),
             catches = self.catch_clauses(m, "result.call_status", "        "),
         )
@@ -157,7 +157,24 @@ impl Gen<'_> {
     }
 }
 
-/// Used by async callback wrappers: Rust may ask us to cancel a foreign future, and a
-/// `std::future` cannot be cancelled, so there is nothing to do.
-pub(crate) const FOREIGN_FUTURE_DROPPED: &str =
-    "[[maybe_unused]] void foreign_future_dropped(uint64_t) {}\n\n";
+/// The cancel functions of the futures that async callbacks returned, by the handle
+/// Rust was given; Rust calls `foreign_future_dropped` with it when it drops the future.
+pub(crate) const FOREIGN_FUTURE_DROPPED: &str = r#"[[maybe_unused]] uniffi::HandleMap<std::function<void()>>& foreign_futures() {
+    static auto* futures = new uniffi::HandleMap<std::function<void()>>();
+    return *futures;
+}
+
+[[maybe_unused]] void foreign_future_dropped(uint64_t handle) {
+    if (handle == 0) {
+        return;
+    }
+    std::function<void()> cancel;
+    try {
+        cancel = foreign_futures().remove(handle);
+    } catch (const std::exception&) {
+        return;
+    }
+    cancel();
+}
+
+"#;

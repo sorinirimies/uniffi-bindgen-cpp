@@ -489,17 +489,30 @@ bool equal(const std::map<K, V>& a, const std::map<K, V>& b) {
 }
 
 // ---------------------------------------------------------------------------
-// Async: Rust futures become `std::future`. A single background thread polls
-// them, so a wake-up from a Rust thread never re-enters Rust.
+// Async.
+//
+// A Rust `async fn` returns a `uniffi::Future<T>`: wait for it with `get()`, attach a
+// continuation with `then()`, cancel it with `cancel()`, or `co_await` it in C++20.
+// An async method of a callback interface returns a `uniffi::Future<T>` as well;
+// make one with `uniffi::Promise<T>` or `uniffi::Future<T>::ready()`.
+//
+// Continuations (the polling of Rust futures and the callbacks given to `then()`)
+// run on the executor. By default that is one background thread; hand them to your
+// own event loop with `uniffi::set_executor()`.
 // ---------------------------------------------------------------------------
+
+/// Runs a task, now or later, on any thread. Must not run it inline if the caller
+/// holds locks the task needs; posting to a queue is always safe.
+using Executor = std::function<void(std::function<void()>)>;
 
 namespace detail {
 
-class Executor {
+/// The default executor: one background thread, leaked on purpose so that it
+/// outlives static destruction.
+class DefaultExecutor {
 public:
-    static Executor& instance() {
-        // Leaked on purpose: the worker thread outlives static destruction.
-        static Executor* executor = new Executor();
+    static DefaultExecutor& instance() {
+        static DefaultExecutor* executor = new DefaultExecutor();
         return *executor;
     }
 
@@ -512,7 +525,7 @@ public:
     }
 
 private:
-    Executor() : thread_([this] { run(); }) { thread_.detach(); }
+    DefaultExecutor() : thread_([this] { run(); }) { thread_.detach(); }
 
     void run() {
         for (;;) {
@@ -533,67 +546,342 @@ private:
     std::thread thread_;
 };
 
-using PollFn = void (*)(uint64_t, void (*)(uint64_t, int8_t), uint64_t);
-using FreeFn = void (*)(uint64_t);
-
-struct FutureTask {
-    uint64_t handle;
-    PollFn poll;
-    FreeFn free_fn;
-    std::function<void()> finish;
+struct ExecutorSlot {
+    std::mutex mutex;
+    Executor executor;
 };
 
-inline void poll_step(const std::shared_ptr<FutureTask>& task);
+inline ExecutorSlot& executor_slot() {
+    static ExecutorSlot* slot = new ExecutorSlot();
+    return *slot;
+}
+
+inline void post(std::function<void()> task) {
+    Executor executor;
+    {
+        std::lock_guard<std::mutex> lock(executor_slot().mutex);
+        executor = executor_slot().executor;
+    }
+    if (executor) {
+        executor(std::move(task));
+    } else {
+        DefaultExecutor::instance().post(std::move(task));
+    }
+}
+
+/// What a `Future` and its producer share.
+template <class T>
+struct SharedState {
+    using Value = std::conditional_t<std::is_void_v<T>, std::monostate, T>;
+
+    std::mutex mutex;
+    std::condition_variable cv;
+    bool done = false;
+    bool cancel_requested = false;
+    std::optional<Value> value;
+    std::exception_ptr error;
+    std::vector<std::function<void()>> on_done;
+    /// Set by the producer: stops the work when the consumer cancels.
+    std::function<void()> on_cancel;
+
+    void finish(std::optional<Value> v, std::exception_ptr e) {
+        std::vector<std::function<void()>> callbacks;
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            if (done) {
+                return;
+            }
+            done = true;
+            value = std::move(v);
+            error = std::move(e);
+            callbacks.swap(on_done);
+            on_cancel = nullptr;
+        }
+        cv.notify_all();
+        for (auto& callback : callbacks) {
+            post(std::move(callback));
+        }
+    }
+
+    void request_cancel() {
+        std::function<void()> cancel;
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            if (done || cancel_requested) {
+                return;
+            }
+            cancel_requested = true;
+            cancel = on_cancel;
+        }
+        if (cancel) {
+            cancel();
+        }
+    }
+};
+
+}  // namespace detail
+
+/// Sets the executor that runs async continuations; an empty one restores the
+/// default background thread.
+inline void set_executor(Executor executor) {
+    std::lock_guard<std::mutex> lock(detail::executor_slot().mutex);
+    detail::executor_slot().executor = std::move(executor);
+}
+
+template <class T>
+class Promise;
+
+/// The eventual result of an async call. Move-only, like `std::future`.
+template <class T>
+class Future {
+public:
+    Future() = default;
+
+    /// A future that is already complete.
+    template <class U = T, class = std::enable_if_t<!std::is_void_v<U>>>
+    static Future ready(U value) {
+        Future future(std::make_shared<detail::SharedState<T>>());
+        future.state_->finish(std::move(value), nullptr);
+        return future;
+    }
+
+    /// A completed `Future<void>`.
+    template <class U = T, class = std::enable_if_t<std::is_void_v<U>>>
+    static Future ready() {
+        Future future(std::make_shared<detail::SharedState<T>>());
+        future.state_->finish(std::monostate{}, nullptr);
+        return future;
+    }
+
+    /// A future that failed with `error`.
+    static Future failed(std::exception_ptr error) {
+        Future future(std::make_shared<detail::SharedState<T>>());
+        future.state_->finish(std::nullopt, std::move(error));
+        return future;
+    }
+
+    /// Adopts a `std::future`. Waiting for it takes a thread of its own until it is
+    /// ready; prefer `uniffi::Promise` where you can complete the result directly.
+    static Future from(std::future<T> future) {
+        Promise<T> promise;
+        Future result = promise.get_future();
+        std::thread([promise, future = std::move(future)]() mutable {
+            try {
+                if constexpr (std::is_void_v<T>) {
+                    future.get();
+                    promise.set_value();
+                } else {
+                    promise.set_value(future.get());
+                }
+            } catch (...) {
+                promise.set_exception(std::current_exception());
+            }
+        }).detach();
+        return result;
+    }
+
+    bool valid() const { return state_ != nullptr; }
+
+    bool is_ready() const {
+        std::lock_guard<std::mutex> lock(state().mutex);
+        return state().done;
+    }
+
+    void wait() const {
+        std::unique_lock<std::mutex> lock(state().mutex);
+        state().cv.wait(lock, [this] { return state().done; });
+    }
+
+    template <class Rep, class Period>
+    std::future_status wait_for(const std::chrono::duration<Rep, Period>& timeout) const {
+        std::unique_lock<std::mutex> lock(state().mutex);
+        bool done = state().cv.wait_for(lock, timeout, [this] { return state().done; });
+        return done ? std::future_status::ready : std::future_status::timeout;
+    }
+
+    /// Waits for the result and returns it, or throws the error. Like
+    /// `std::future::get()` it can be called once.
+    T get() {
+        wait();
+        auto state = std::move(state_);
+        if (state->error) {
+            std::rethrow_exception(state->error);
+        }
+        if constexpr (!std::is_void_v<T>) {
+            return std::move(*state->value);
+        }
+    }
+
+    /// Asks the producer to stop. A Rust future is dropped and `get()` throws
+    /// `uniffi::CancelledError`; a no-op once the result is there.
+    void cancel() {
+        if (state_) {
+            state_->request_cancel();
+        }
+    }
+
+    /// Calls `callback(Future<T>)` with the completed future, on the executor.
+    template <class F>
+    void then(F callback) {
+        auto state = std::move(state_);
+        auto run = [state, callback = std::move(callback)]() mutable {
+            callback(Future(state));
+        };
+        std::unique_lock<std::mutex> lock(state->mutex);
+        if (state->done) {
+            lock.unlock();
+            detail::post(std::move(run));
+        } else {
+            state->on_done.push_back(std::move(run));
+        }
+    }
+
+#if defined(__cpp_impl_coroutine) && __cpp_impl_coroutine >= 201902L
+    bool await_ready() const { return is_ready(); }
+    template <class Handle>
+    void await_suspend(Handle handle) {
+        auto state = state_;
+        std::unique_lock<std::mutex> lock(state->mutex);
+        if (state->done) {
+            lock.unlock();
+            detail::post([handle] { handle.resume(); });
+        } else {
+            state->on_done.push_back([handle] { handle.resume(); });
+        }
+    }
+    T await_resume() { return get(); }
+#endif
+
+    /// For generated code: the shared state.
+    explicit Future(std::shared_ptr<detail::SharedState<T>> state) : state_(std::move(state)) {}
+    const std::shared_ptr<detail::SharedState<T>>& uniffi_state() const { return state_; }
+
+private:
+    detail::SharedState<T>& state() const {
+        if (!state_) {
+            throw std::future_error(std::future_errc::no_state);
+        }
+        return *state_;
+    }
+
+    std::shared_ptr<detail::SharedState<T>> state_;
+};
+
+/// Completes a `uniffi::Future`: what an async callback implementation returns.
+/// Copyable; all copies complete the same future.
+template <class T>
+class Promise {
+public:
+    Promise() : state_(std::make_shared<detail::SharedState<T>>()) {}
+
+    Future<T> get_future() const { return Future<T>(state_); }
+
+    template <class U = T, class = std::enable_if_t<!std::is_void_v<U>>>
+    void set_value(U value) const {
+        state_->finish(std::move(value), nullptr);
+    }
+
+    template <class U = T, class = std::enable_if_t<std::is_void_v<U>>>
+    void set_value() const {
+        state_->finish(std::monostate{}, nullptr);
+    }
+
+    void set_exception(std::exception_ptr error) const { state_->finish(std::nullopt, std::move(error)); }
+
+    /// True once the consumer (for a callback, Rust) no longer wants the result.
+    bool is_cancelled() const {
+        std::lock_guard<std::mutex> lock(state_->mutex);
+        return state_->cancel_requested;
+    }
+
+    /// Runs `callback` when the consumer cancels; at once if it already has.
+    void on_cancel(std::function<void()> callback) const {
+        {
+            std::lock_guard<std::mutex> lock(state_->mutex);
+            if (!state_->cancel_requested) {
+                state_->on_cancel = std::move(callback);
+                return;
+            }
+        }
+        callback();
+    }
+
+private:
+    std::shared_ptr<detail::SharedState<T>> state_;
+};
+
+namespace detail {
+
+using PollFn = void (*)(uint64_t, void (*)(uint64_t, int8_t), uint64_t);
+using HandleFn = void (*)(uint64_t);
+
+/// A Rust future being polled. `freed` guards `cancel` against a freed handle.
+struct RustFuture {
+    uint64_t handle;
+    PollFn poll;
+    HandleFn cancel;
+    HandleFn free_fn;
+    std::function<void()> finish;
+    std::mutex mutex;
+    bool freed = false;
+};
+
+inline void poll_step(const std::shared_ptr<RustFuture>& future);
 
 inline void on_continuation(uint64_t data, int8_t poll_result) {
-    auto* raw = reinterpret_cast<std::shared_ptr<FutureTask>*>(data);
-    Executor::instance().post([raw, poll_result] {
-        std::unique_ptr<std::shared_ptr<FutureTask>> owner(raw);
-        std::shared_ptr<FutureTask> task = *owner;
+    auto* raw = reinterpret_cast<std::shared_ptr<RustFuture>*>(data);
+    post([raw, poll_result] {
+        std::unique_ptr<std::shared_ptr<RustFuture>> owner(raw);
+        std::shared_ptr<RustFuture> future = *owner;
         if (poll_result == RUST_FUTURE_POLL_READY) {
-            task->finish();
-            task->free_fn(task->handle);
+            future->finish();
+            std::lock_guard<std::mutex> lock(future->mutex);
+            future->free_fn(future->handle);
+            future->freed = true;
         } else {
-            poll_step(task);
+            poll_step(future);
         }
     });
 }
 
-inline void poll_step(const std::shared_ptr<FutureTask>& task) {
-    auto* raw = new std::shared_ptr<FutureTask>(task);
-    task->poll(task->handle, &on_continuation, reinterpret_cast<uint64_t>(raw));
+inline void poll_step(const std::shared_ptr<RustFuture>& future) {
+    auto* raw = new std::shared_ptr<RustFuture>(future);
+    future->poll(future->handle, &on_continuation, reinterpret_cast<uint64_t>(raw));
 }
 
-/// Start driving the Rust future `handle`. `complete` runs once the future is
-/// ready, on the executor thread, and produces the result or throws.
+/// Starts driving the Rust future `handle`. `complete` runs once it is ready, on
+/// the executor, and produces the result or throws.
 template <class R, class Complete>
-std::future<R> start_future(uint64_t handle, PollFn poll, FreeFn free_fn, Complete complete) {
-    auto promise = std::make_shared<std::promise<R>>();
-    std::future<R> future = promise->get_future();
-    auto task = std::make_shared<FutureTask>();
-    task->handle = handle;
-    task->poll = poll;
-    task->free_fn = free_fn;
-    task->finish = [promise, complete, handle]() mutable {
+Future<R> start_future(uint64_t handle, PollFn poll, HandleFn cancel, HandleFn free_fn, Complete complete) {
+    auto state = std::make_shared<SharedState<R>>();
+    auto future = std::make_shared<RustFuture>();
+    future->handle = handle;
+    future->poll = poll;
+    future->cancel = cancel;
+    future->free_fn = free_fn;
+    future->finish = [state, complete, handle]() mutable {
         try {
             if constexpr (std::is_void_v<R>) {
                 complete(handle);
-                promise->set_value();
+                state->finish(std::monostate{}, nullptr);
             } else {
-                promise->set_value(complete(handle));
+                state->finish(complete(handle), nullptr);
             }
         } catch (...) {
-            promise->set_exception(std::current_exception());
+            state->finish(std::nullopt, std::current_exception());
         }
     };
-    Executor::instance().post([task] { poll_step(task); });
-    return future;
-}
-
-/// Run `fn` on its own thread. Used to wait for futures returned by foreign
-/// implementations of async callback methods without blocking the executor.
-inline void spawn(std::function<void()> fn) {
-    std::thread(std::move(fn)).detach();
+    std::weak_ptr<RustFuture> weak = future;
+    state->on_cancel = [weak] {
+        if (auto f = weak.lock()) {
+            std::lock_guard<std::mutex> lock(f->mutex);
+            if (!f->freed) {
+                f->cancel(f->handle);
+            }
+        }
+    };
+    post([future] { poll_step(future); });
+    return Future<R>(state);
 }
 
 }  // namespace detail

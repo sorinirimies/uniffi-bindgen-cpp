@@ -57,8 +57,9 @@ impl Gen<'_> {
             );
             let _ = writeln!(
                 out,
-                "{indent}return uniffi::detail::start_future<{ret_cpp}>(\n{indent}    uniffi_future, &ffi::{poll}, &ffi::{free},\n{indent}    [](uint64_t uniffi_handle) -> {ret_cpp} {{\n{indent}        uniffi::RustCallStatus uniffi_status{{}};\n{indent}        {assign}ffi::{complete}(uniffi_handle, &uniffi_status);\n{indent}        uniffi_detail::check_status(uniffi_status{thrower});\n{ret_line}{indent}    }});",
+                "{indent}return uniffi::detail::start_future<{ret_cpp}>(\n{indent}    uniffi_future, &ffi::{poll}, &ffi::{cancel}, &ffi::{free},\n{indent}    [](uint64_t uniffi_handle) -> {ret_cpp} {{\n{indent}        uniffi::RustCallStatus uniffi_status{{}};\n{indent}        {assign}ffi::{complete}(uniffi_handle, &uniffi_status);\n{indent}        uniffi_detail::check_status(uniffi_status{thrower});\n{ret_line}{indent}    }});",
                 poll = c.ffi_rust_future_poll(self.ci),
+                cancel = c.ffi_rust_future_cancel(self.ci),
                 free = c.ffi_rust_future_free(self.ci),
                 complete = c.ffi_rust_future_complete(self.ci),
             );
