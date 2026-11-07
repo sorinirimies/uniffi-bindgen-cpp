@@ -1,0 +1,13 @@
+[package]
+name = "uniffi-fixture-keywords-rust"
+version = "0.22.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["lib", "cdylib"]
+name = "uniffi_keywords_rust"
+
+[dependencies]
+thiserror = "2"
+uniffi = { workspace = true }

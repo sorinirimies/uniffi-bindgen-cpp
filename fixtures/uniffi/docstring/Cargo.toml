@@ -1,0 +1,17 @@
+[package]
+name = "uniffi-fixture-docstring"
+version = "0.22.0"
+edition = "2021"
+license = "MPL-2.0"
+publish = false
+
+[lib]
+name = "uniffi_fixture_docstring"
+crate-type = ["lib", "cdylib"]
+
+[dependencies]
+thiserror = "2"
+uniffi = { workspace = true }
+
+[build-dependencies]
+uniffi = { workspace = true, features = ["build"] }

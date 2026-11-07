@@ -84,23 +84,22 @@ fn header_declares_every_kind_of_definition() {
         "class Oops_Bad final : public Oops {",
         "class Detailed_Code final : public Detailed {",
         "class Thing {",
-        "static std::shared_ptr<Thing> new_(const std::string& name);",
-        "static std::shared_ptr<Thing> other(uint32_t n);",
+        "static std::shared_ptr<::sample::Thing> new_(const std::string& name);",
+        "static std::shared_ptr<::sample::Thing> other(uint32_t n);",
         "std::future<uint32_t> later() const;",
         "class Sink {",
         "virtual void push(const std::string& s) = 0;",
-        "struct Codec<sample::Point>",
+        "struct Codec<::sample::Point>",
     ] {
         assert!(h.contains(expected), "header is missing `{expected}`:\n{h}");
     }
 }
 
 #[test]
-fn header_keeps_argument_defaults() {
+fn header_keeps_trailing_argument_defaults() {
     let h = generate().header;
     assert!(
-        h.contains("shape_of(const Point& p, double radius = 2.5);")
-            || h.contains("double radius = static_cast<double>"),
+        h.contains("::sample::Shape shape_of(const ::sample::Point& p, double radius = 2.5);"),
         "{h}"
     );
 }
@@ -112,7 +111,7 @@ fn source_calls_the_scaffolding_and_checks_status() {
         "#include \"sample.hpp\"",
         "namespace uniffi_ffi_sample {",
         "uniffi_detail::ensure_init();",
-        "uniffi_detail::check_status(status, &uniffi_detail::throw_buf_Oops);",
+        "uniffi_detail::check_status(uniffi_status, &uniffi_detail::throw_buf_Oops);",
         "uniffi::detail::start_future<std::string>(",
         "Thing::~Thing()",
         "uint64_t Thing::uniffi_clone_handle() const",
@@ -220,23 +219,27 @@ fn bytes_go_through_the_length_prefixed_codec() {
     assert!(
         files
             .source
-            .contains("uniffi_detail::lift_buf<std::vector<uint8_t>>(result)")
+            .contains("uniffi_detail::lift_buf<std::vector<uint8_t>>(uniffi_result)")
     );
     assert!(!files.source.contains("lower_bytes") && !files.source.contains("lift_bytes"));
 }
 
 // Regression: a record holding an object used `Codec<std::shared_ptr<Obj>>` before
-// it was defined, which does not compile.
+// it was defined, which does not compile. Value codecs are now defined out of line,
+// after every codec class.
 #[test]
-fn object_codecs_are_defined_before_record_codecs() {
+fn value_codecs_are_defined_after_every_codec_class() {
     let h = generate().header;
     let object = h
-        .find("struct Codec<std::shared_ptr<sample::Thing>> {")
+        .find("struct Codec<std::shared_ptr<::sample::Thing>> {")
         .expect("object codec");
-    let record = h
-        .find("struct Codec<sample::Holder> {")
-        .expect("record codec");
-    assert!(object < record, "object codec must come first");
+    let record_class = h
+        .find("struct Codec<::sample::Holder> {")
+        .expect("record codec class");
+    let record_read = h
+        .find("inline ::sample::Holder Codec<::sample::Holder>::read(Reader& reader) {")
+        .expect("record codec definition");
+    assert!(object < record_read && record_class < record_read);
 }
 
 // Regression: callback vtable types were qualified twice (`ffi::ffi::`).

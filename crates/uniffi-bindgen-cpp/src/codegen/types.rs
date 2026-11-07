@@ -4,7 +4,7 @@
 use uniffi_bindgen::ComponentInterface;
 use uniffi_bindgen::interface::{DefaultValue, FfiType, Literal, Radix, Type};
 
-use super::names::{class, string_literal};
+use super::names::{class, member, string_literal};
 use crate::config::{Config, CustomTypeConfig};
 
 /// Everything the emitters need to know about the component being generated.
@@ -25,34 +25,34 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// `other_ns::` for types defined in another component, empty otherwise.
+    /// `::other_ns::` for types defined in another component, empty otherwise.
     pub(crate) fn qualifier(&self, t: &Type) -> String {
         if !self.ci.is_external(t) {
             return String::new();
         }
         match self.ci.namespace_for_type(t) {
-            Ok(ns) => format!("{ns}::"),
+            Ok(ns) => format!("::{ns}::"),
             Err(_) => match module_path_of(t) {
-                Some(path) => format!("{}::", path.split("::").next().unwrap_or(path)),
+                Some(path) => format!("::{}::", path.split("::").next().unwrap_or(path)),
                 None => String::new(),
             },
         }
     }
 
-    /// The name of a user-defined type, qualified when it lives in another component.
+    /// The fully qualified name of a user-defined type. Always qualified, so that a
+    /// member or variant with the same name cannot hide it.
     pub(crate) fn named(&self, t: &Type, name: &str) -> String {
-        self.named_in(t, name, false)
-    }
-
-    /// Like [`Self::named`]; with `outside` set, local types are qualified with this
-    /// component's namespace too (for code that sits outside of it).
-    pub(crate) fn named_in(&self, t: &Type, name: &str, outside: bool) -> String {
         let q = self.qualifier(t);
-        if q.is_empty() && outside {
-            format!("{}::{}", self.ns, class(name))
+        if q.is_empty() {
+            self.local(name)
         } else {
             format!("{q}{}", class(name))
         }
+    }
+
+    /// The fully qualified name of a type this component defines.
+    pub(crate) fn local(&self, name: &str) -> String {
+        format!("::{}::{}", self.ns, class(name))
     }
 
     pub(crate) fn custom_config(&self, name: &str) -> Option<&CustomTypeConfig> {
@@ -61,16 +61,7 @@ impl<'a> Gen<'a> {
 
     /// The C++ type that represents `t` to the caller.
     pub(crate) fn cpp_type(&self, t: &Type) -> String {
-        self.type_name(t, false)
-    }
-
-    /// [`Self::cpp_type`] for code outside of this component's namespace.
-    pub(crate) fn cpp_type_outside(&self, t: &Type) -> String {
-        self.type_name(t, true)
-    }
-
-    fn type_name(&self, t: &Type, outside: bool) -> String {
-        let rec = |t: &Type| self.type_name(t, outside);
+        let rec = |t: &Type| self.cpp_type(t);
         match t {
             Type::UInt8 => "uint8_t".into(),
             Type::Int8 => "int8_t".into(),
@@ -88,9 +79,13 @@ impl<'a> Gen<'a> {
             Type::Timestamp => "uniffi::Timestamp".into(),
             Type::Duration => "uniffi::Duration".into(),
             Type::Object { name, .. } | Type::CallbackInterface { name, .. } => {
-                format!("std::shared_ptr<{}>", self.named_in(t, name, outside))
+                format!("std::shared_ptr<{}>", self.named(t, name))
             }
-            Type::Record { name, .. } | Type::Enum { name, .. } => self.named_in(t, name, outside),
+            // Errors are class hierarchies, held by pointer to keep the variant.
+            Type::Enum { name, .. } if self.is_error_enum(name) => {
+                format!("std::shared_ptr<{}>", self.named(t, name))
+            }
+            Type::Record { name, .. } | Type::Enum { name, .. } => self.named(t, name),
             Type::Optional { inner_type } => format!("std::optional<{}>", rec(inner_type)),
             Type::Sequence { inner_type } => format!("std::vector<{}>", rec(inner_type)),
             Type::Map {
@@ -102,7 +97,7 @@ impl<'a> Gen<'a> {
             Type::Custom { name, .. } => {
                 match self.custom_config(name).and_then(|c| c.type_name.clone()) {
                     Some(type_name) if !self.ci.is_external(t) => type_name,
-                    _ => self.named_in(t, name, outside),
+                    _ => self.named(t, name),
                 }
             }
         }
@@ -258,11 +253,16 @@ impl<'a> Gen<'a> {
             },
             Literal::Enum(variant, ty) => match ty {
                 Type::Enum { name, .. } if self.is_flat_enum(ty) => {
-                    format!("{}::{}", self.named(ty, name), class(variant))
+                    format!(
+                        "{}::{}",
+                        self.named(ty, name),
+                        class(&self.variant_named(name, variant))
+                    )
                 }
                 Type::Enum { name, .. } => {
                     let enum_name = self.named(ty, name);
-                    format!("{enum_name}{{{enum_name}::{}{{}}}}", class(variant))
+                    let variant = member(&self.variant_named(name, variant), name);
+                    format!("{enum_name}{{{enum_name}::{variant}{{}}}}")
                 }
                 _ => return None,
             },
@@ -277,6 +277,20 @@ impl<'a> Gen<'a> {
                 format!("{}({inner})", self.cpp_type(t))
             }
         })
+    }
+
+    /// The variant of enum `enum_name` a default value refers to. UDL spells it in any
+    /// case (`"DEUX"` for `Deux`), so match ignoring case and underscores.
+    fn variant_named(&self, enum_name: &str, literal: &str) -> String {
+        let normal = |s: &str| s.replace('_', "").to_ascii_lowercase();
+        self.ci
+            .get_enum_definition(enum_name)
+            .and_then(|e| {
+                e.variants()
+                    .iter()
+                    .find(|v| normal(v.name()) == normal(literal))
+            })
+            .map_or_else(|| literal.to_owned(), |v| v.name().to_owned())
     }
 
     fn int_literal(&self, v: i128, radix: Radix, ty: &Type) -> String {

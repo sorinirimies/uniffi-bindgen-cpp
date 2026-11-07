@@ -1,0 +1,19 @@
+[package]
+name = "uniffi-fixture-proc-macro"
+version = "0.22.0"
+edition = "2018"
+license = "MPL-2.0"
+publish = false
+
+[lib]
+name = "uniffi_proc_macro"
+crate-type = ["lib", "cdylib"]
+
+[dependencies]
+# Add the "scaffolding-ffi-buffer-fns" feature to make sure things can build correctly
+uniffi = { workspace = true, features = ["scaffolding-ffi-buffer-fns"] }
+thiserror = "2"
+lazy_static = "1.4"
+
+[build-dependencies]
+uniffi = { workspace = true, features = ["build", "scaffolding-ffi-buffer-fns"] }

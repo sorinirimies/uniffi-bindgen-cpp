@@ -7,8 +7,15 @@ use uniffi_bindgen::interface::{
     AsType, Callable, CallbackInterface, Enum, Literal, Object, Record, Type,
 };
 
-use super::names::{class, doc, field, var};
+use super::names::{class, doc, field, member, var};
 use super::types::Gen;
+
+/// A codec specialization: the class, and its member definitions, which have to come
+/// after every codec is declared.
+struct Codec {
+    declaration: String,
+    definition: String,
+}
 
 /// A value type that has to be defined before others can use it.
 enum ValueDef<'a> {
@@ -59,20 +66,41 @@ impl Gen<'_> {
                 .flat_map(|v| v.fields().iter().map(|f| f.as_type()))
                 .collect(),
         };
+        let mut deps = Vec::new();
         for ty in &fields {
-            for inner in ty.iter_types() {
-                if let Type::Record { name, .. } | Type::Enum { name, .. } = inner
-                    && names.contains(name)
-                    && let Some(dep) = all.iter().find(|d| d.name() == name)
-                {
-                    self.visit_def(dep, all, names, done, out);
-                }
+            self.complete_type_deps(ty, &mut deps);
+        }
+        for name in deps {
+            if names.contains(name)
+                && let Some(dep) = all.iter().find(|d| d.name() == name)
+            {
+                self.visit_def(dep, all, names, done, out);
             }
         }
         out.push(match def {
             ValueDef::Record(r) => ValueDef::Record(r),
             ValueDef::Enum(e) => ValueDef::Enum(e),
         });
+    }
+
+    /// The records and enums a member of type `ty` needs complete. `std::vector` and
+    /// `std::shared_ptr` accept incomplete types, so what they hold can come later;
+    /// that is what lets a type refer back to itself through a sequence.
+    fn complete_type_deps<'t>(&self, ty: &'t Type, deps: &mut Vec<&'t str>) {
+        match ty {
+            Type::Enum { name, .. } if self.is_error_enum(name) => {}
+            Type::Record { name, .. } | Type::Enum { name, .. } => deps.push(name),
+            Type::Optional { inner_type } => self.complete_type_deps(inner_type, deps),
+            Type::Map {
+                key_type,
+                value_type,
+            } => {
+                self.complete_type_deps(key_type, deps);
+                self.complete_type_deps(value_type, deps);
+            }
+            Type::Custom { builtin, .. } => self.complete_type_deps(builtin, deps),
+            _ => {}
+        }
     }
 
     /// The namespaces of other components this one refers to.
@@ -158,24 +186,48 @@ impl Gen<'_> {
         out
     }
 
+    /// `using Name = ...;` for each custom type, each after the custom types it uses.
     fn emit_custom_aliases(&self) -> String {
+        let customs: Vec<(&str, &Type)> = self
+            .ci
+            .iter_local_types()
+            .filter_map(|t| match t {
+                Type::Custom { name, builtin, .. } => Some((name.as_str(), builtin.as_ref())),
+                _ => None,
+            })
+            .collect();
         let mut out = String::new();
-        let mut seen = BTreeSet::new();
-        for t in self.ci.iter_local_types() {
-            let Type::Custom { name, builtin, .. } = t else {
-                continue;
-            };
-            if !seen.insert(name.clone()) {
-                continue;
-            }
-            let target = match self.custom_config(name).and_then(|c| c.type_name.clone()) {
-                Some(type_name) => type_name,
-                None => self.cpp_type(builtin),
-            };
-            let _ = writeln!(out, "using {} = {target};", class(name));
+        let mut done = BTreeSet::new();
+        for (name, _) in &customs {
+            self.visit_custom(name, &customs, &mut done, &mut out);
         }
         out.push('\n');
         out
+    }
+
+    fn visit_custom<'t>(
+        &self,
+        name: &'t str,
+        customs: &[(&'t str, &'t Type)],
+        done: &mut BTreeSet<&'t str>,
+        out: &mut String,
+    ) {
+        let Some((_, builtin)) = customs.iter().find(|(n, _)| *n == name) else {
+            return;
+        };
+        if !done.insert(name) {
+            return;
+        }
+        for inner in builtin.iter_types() {
+            if let Type::Custom { name: dep, .. } = inner {
+                self.visit_custom(dep, customs, done, out);
+            }
+        }
+        let target = match self.custom_config(name).and_then(|c| c.type_name.clone()) {
+            Some(type_name) => type_name,
+            None => self.cpp_type(builtin),
+        };
+        let _ = writeln!(out, "using {} = {target};", class(name));
     }
 
     fn emit_flat_enum(&self, e: &Enum) -> String {
@@ -204,19 +256,24 @@ impl Gen<'_> {
         let _ = writeln!(out, "struct {name} {{");
         for v in e.variants() {
             out.push_str(&doc(v.docstring(), 4));
-            let _ = writeln!(out, "    struct {} {{", class(v.name()));
+            let vname = member(v.name(), e.name());
+            let _ = writeln!(out, "    struct {vname} {{");
             for (i, f) in v.fields().iter().enumerate() {
                 out.push_str(&doc(f.docstring(), 8));
                 let _ = writeln!(
                     out,
                     "        {} {};",
                     self.cpp_type(&f.as_type()),
-                    field(f.name(), i)
+                    member(&field(f.name(), i), &vname)
                 );
             }
             let _ = writeln!(out, "    }};");
         }
-        let alternatives: Vec<String> = e.variants().iter().map(|v| class(v.name())).collect();
+        let alternatives: Vec<String> = e
+            .variants()
+            .iter()
+            .map(|v| member(v.name(), e.name()))
+            .collect();
         let _ = writeln!(
             out,
             "\n    using Variant = std::variant<{}>;",
@@ -251,7 +308,7 @@ impl Gen<'_> {
                 out,
                 "    {} {}{default};",
                 self.cpp_type(&ty),
-                var(f.name())
+                member(f.name(), r.name())
             );
         }
         let _ = writeln!(out, "}};\n");
@@ -264,36 +321,30 @@ impl Gen<'_> {
         let mut out = doc(e.docstring(), 0);
         let _ = writeln!(
             out,
-            "class {name} : public uniffi::Exception {{\npublic:\n    ~{name}() override = default;\n    virtual int32_t uniffi_variant_index() const = 0;\n    virtual void uniffi_write_fields(uniffi::Writer& writer) const = 0;\n\nprotected:\n    explicit {name}(const std::string& what) : uniffi::Exception(what) {{}}\n}};\n"
+            "class {name} : public uniffi::Exception {{\npublic:\n    ~{name}() override = default;\n    virtual int32_t uniffi_variant_index() const = 0;\n    virtual void uniffi_write_fields(uniffi::Writer& writer) const = 0;\n    /// Throws this error as its most derived type.\n    [[noreturn]] virtual void uniffi_throw() const = 0;\n\nprotected:\n    explicit {name}(const std::string& what) : uniffi::Exception(what) {{}}\n}};\n"
         );
         for (i, v) in e.variants().iter().enumerate() {
             let vname = format!("{name}_{}", class(v.name()));
             out.push_str(&doc(v.docstring(), 0));
             let _ = writeln!(out, "class {vname} final : public {name} {{\npublic:");
-            let (ctor_params, ctor_init, members, write_fields) = if flat {
+            let (ctor_params, ctor_init, members) = if flat {
                 (
                     "std::string message_".to_owned(),
                     format!("{name}(message_), message(std::move(message_))"),
                     "    std::string message;\n".to_owned(),
-                    String::new(),
                 )
             } else {
                 let mut params = Vec::new();
                 let mut inits = vec![format!("{name}(\"{name}::{}\")", v.name())];
                 let mut members = String::new();
-                let mut writes = String::new();
                 for (j, f) in v.fields().iter().enumerate() {
-                    let fname = field(f.name(), j);
+                    let fname = member(&field(f.name(), j), &vname);
                     let ty = self.cpp_type(&f.as_type());
                     params.push(format!("{ty} {fname}_"));
                     inits.push(format!("{fname}(std::move({fname}_))"));
                     members.push_str(&format!("    {ty} {fname};\n"));
-                    writes.push_str(&format!(
-                        "        uniffi::Codec<{}>::write(writer, {fname});\n",
-                        self.cpp_type_outside(&f.as_type())
-                    ));
                 }
-                (params.join(", "), inits.join(", "), members, writes)
+                (params.join(", "), inits.join(", "), members)
             };
             if ctor_params.is_empty() {
                 let _ = writeln!(out, "    {vname}() : {ctor_init} {{}}");
@@ -308,7 +359,7 @@ impl Gen<'_> {
             out.push_str(&members);
             let _ = writeln!(
                 out,
-                "\n    int32_t uniffi_variant_index() const override {{ return {}; }}\n    void uniffi_write_fields(uniffi::Writer& writer) const override {{\n        (void)writer;\n{write_fields}    }}\n}};\n",
+                "\n    int32_t uniffi_variant_index() const override {{ return {}; }}\n    void uniffi_write_fields(uniffi::Writer& writer) const override;\n    [[noreturn]] void uniffi_throw() const override {{ throw *this; }}\n}};\n",
                 i + 1
             );
         }
@@ -368,7 +419,7 @@ impl Gen<'_> {
             let _ = writeln!(
                 out,
                 "    virtual {} = 0;",
-                self.signature(m, &var(m.name()), false)
+                self.signature(m, &member(m.name(), cb.name()), false)
             );
         }
         let _ = writeln!(out, "}};\n");
@@ -390,7 +441,7 @@ impl Gen<'_> {
                 let _ = writeln!(
                     out,
                     "    virtual {} = 0;",
-                    self.signature(m, &var(m.name()), false)
+                    self.signature(m, &member(m.name(), obj.name()), false)
                 );
             }
         } else {
@@ -404,7 +455,7 @@ impl Gen<'_> {
                 let _ = writeln!(
                     out,
                     "    static {};",
-                    self.signature(c, &var(c.name()), true)
+                    self.signature(c, &member(c.name(), obj.name()), true)
                 );
             }
             for m in obj.methods() {
@@ -412,7 +463,7 @@ impl Gen<'_> {
                 let _ = writeln!(
                     out,
                     "    {} const;",
-                    self.signature(m, &var(m.name()), true)
+                    self.signature(m, &member(m.name(), obj.name()), true)
                 );
             }
             let _ = writeln!(
@@ -500,164 +551,233 @@ impl Gen<'_> {
     }
 
     /// `uniffi::Codec` specializations for every type defined by this component.
+    ///
+    /// All codecs are declared before any is defined, and value codecs are defined out of
+    /// line after that, so that types can refer to each other in any order (`Value` holds
+    /// `std::vector<Entry>` and `Entry` holds a `Value`).
     fn emit_codecs(&self) -> String {
         let mut out = String::from("namespace uniffi {\n\n");
         let value_defs = self.ordered_value_defs();
-        // Declare first so that the definitions can refer to each other freely.
         for def in &value_defs {
             let _ = writeln!(
                 out,
                 "template <>\nstruct Codec<{}>;",
-                self.outside_name(def.name())
+                self.codec_type(def.name())
             );
         }
-        for o in self.ci.object_definitions() {
+        for name in self.handle_type_names() {
             let _ = writeln!(
                 out,
                 "template <>\nstruct Codec<std::shared_ptr<{}>>;",
-                self.outside_name(o.name())
-            );
-        }
-        for c in self.ci.callback_interface_definitions() {
-            let _ = writeln!(
-                out,
-                "template <>\nstruct Codec<std::shared_ptr<{}>>;",
-                self.outside_name(c.name())
+                self.local(name)
             );
         }
         out.push('\n');
-        for o in self.ci.object_definitions() {
-            out.push_str(&self.codec_handle(o.name()));
+        for name in self.handle_type_names() {
+            out.push_str(&self.codec_handle(name));
         }
-        for c in self.ci.callback_interface_definitions() {
-            out.push_str(&self.codec_handle(c.name()));
-        }
+        let mut definitions = String::new();
         for def in &value_defs {
-            match def {
-                ValueDef::Record(r) => out.push_str(&self.codec_record(r)),
-                ValueDef::Enum(e) if self.is_error_enum(e.name()) => {
-                    out.push_str(&self.codec_error(e));
-                }
-                ValueDef::Enum(e) if e.is_flat() => out.push_str(&self.codec_flat_enum(e)),
-                ValueDef::Enum(e) => out.push_str(&self.codec_data_enum(e)),
-            }
+            let codec = match def {
+                ValueDef::Record(r) => self.codec_record(r),
+                ValueDef::Enum(e) if self.is_error_enum(e.name()) => self.codec_error(e),
+                ValueDef::Enum(e) if e.is_flat() => self.codec_flat_enum(e),
+                ValueDef::Enum(e) => self.codec_data_enum(e),
+            };
+            out.push_str(&codec.declaration);
+            definitions.push_str(&codec.definition);
         }
+        out.push_str(&definitions);
         out.push_str(&self.codec_custom());
-        let _ = writeln!(out, "}}  // namespace uniffi");
+        let _ = writeln!(out, "}}  // namespace uniffi\n");
+        out.push_str(&self.emit_error_field_writers());
         out
     }
 
-    fn outside_name(&self, name: &str) -> String {
-        format!("{}::{}", self.ns, class(name))
+    /// Objects and callback interfaces: the types passed as handles.
+    fn handle_type_names(&self) -> Vec<&str> {
+        self.ci
+            .object_definitions()
+            .iter()
+            .map(|o| o.name())
+            .chain(
+                self.ci
+                    .callback_interface_definitions()
+                    .iter()
+                    .map(|c| c.name()),
+            )
+            .collect()
     }
 
-    fn codec_record(&self, r: &Record) -> String {
-        let full = self.outside_name(r.name());
+    /// The type a value codec is specialized for: errors travel as `std::shared_ptr`.
+    fn codec_type(&self, name: &str) -> String {
+        let full = self.local(name);
+        if self.is_error_enum(name) {
+            format!("std::shared_ptr<{full}>")
+        } else {
+            full
+        }
+    }
+
+    /// A codec whose `read` and `write` are defined after all codecs are declared.
+    fn value_codec(&self, full: &str, write_param: &str, read: &str, write: &str) -> Codec {
+        Codec {
+            declaration: format!(
+                "template <>\nstruct Codec<{full}> {{\n    static {full} read(Reader& reader);\n    static void write(Writer& writer, {write_param} value);\n}};\n\n"
+            ),
+            definition: format!(
+                "inline {full} Codec<{full}>::read(Reader& reader) {{\n    (void)reader;\n{read}}}\n\ninline void Codec<{full}>::write(Writer& writer, {write_param} value) {{\n    (void)writer;\n    (void)value;\n{write}}}\n\n"
+            ),
+        }
+    }
+
+    fn codec_record(&self, r: &Record) -> Codec {
+        let full = self.local(r.name());
         let mut read = String::new();
         let mut args = Vec::new();
         let mut write = String::new();
         for (i, f) in r.fields().iter().enumerate() {
-            let ty = self.cpp_type_outside(&f.as_type());
-            read.push_str(&format!("        auto f{i} = Codec<{ty}>::read(reader);\n"));
+            let ty = self.cpp_type(&f.as_type());
+            read.push_str(&format!("    auto f{i} = Codec<{ty}>::read(reader);\n"));
             args.push(format!("std::move(f{i})"));
             write.push_str(&format!(
-                "        Codec<{ty}>::write(writer, value.{});\n",
-                var(f.name())
+                "    Codec<{ty}>::write(writer, value.{});\n",
+                member(f.name(), r.name())
             ));
         }
-        format!(
-            "template <>\nstruct Codec<{full}> {{\n    static {full} read(Reader& reader) {{\n        (void)reader;\n{read}        return {full}{{{}}};\n    }}\n    static void write(Writer& writer, const {full}& value) {{\n        (void)writer;\n        (void)value;\n{write}    }}\n}};\n\n",
-            args.join(", ")
-        )
+        read.push_str(&format!("    return {full}{{{}}};\n", args.join(", ")));
+        self.value_codec(&full, &format!("const {full}&"), &read, &write)
     }
 
-    fn codec_flat_enum(&self, e: &Enum) -> String {
-        let full = self.outside_name(e.name());
-        let mut read = String::new();
-        let mut write = String::new();
+    fn codec_flat_enum(&self, e: &Enum) -> Codec {
+        let full = self.local(e.name());
+        let mut read = String::from("    switch (reader.read_int<int32_t>()) {\n");
+        let mut write = String::from("    switch (value) {\n");
         for (i, v) in e.variants().iter().enumerate() {
             let variant = format!("{full}::{}", class(v.name()));
-            read.push_str(&format!("            case {}: return {variant};\n", i + 1));
+            read.push_str(&format!("        case {}: return {variant};\n", i + 1));
             write.push_str(&format!(
-                "            case {variant}: writer.write_int<int32_t>({});\n                return;\n",
+                "        case {variant}: writer.write_int<int32_t>({});\n            return;\n",
                 i + 1
             ));
         }
-        format!(
-            "template <>\nstruct Codec<{full}> {{\n    static {full} read(Reader& reader) {{\n        switch (reader.read_int<int32_t>()) {{\n{read}            default: throw InternalError(\"unexpected enum case\");\n        }}\n    }}\n    static void write(Writer& writer, {full} value) {{\n        switch (value) {{\n{write}        }}\n        throw InternalError(\"unexpected enum value\");\n    }}\n}};\n\n"
-        )
+        read.push_str("        default: throw InternalError(\"unexpected enum case\");\n    }\n");
+        write.push_str("    }\n    throw InternalError(\"unexpected enum value\");\n");
+        self.value_codec(&full, &full, &read, &write)
     }
 
-    fn codec_data_enum(&self, e: &Enum) -> String {
-        let full = self.outside_name(e.name());
-        let mut read = String::new();
-        let mut write = String::new();
+    fn codec_data_enum(&self, e: &Enum) -> Codec {
+        let full = self.local(e.name());
+        let mut read = String::from("    switch (reader.read_int<int32_t>()) {\n");
+        let mut write = String::from("    switch (value.variant.index()) {\n");
         for (i, v) in e.variants().iter().enumerate() {
-            let vfull = format!("{full}::{}", class(v.name()));
+            let vname = member(v.name(), e.name());
+            let vfull = format!("{full}::{vname}");
             let mut body = String::new();
             let mut args = Vec::new();
             let mut writes = String::new();
             for (j, f) in v.fields().iter().enumerate() {
-                let ty = self.cpp_type_outside(&f.as_type());
+                let ty = self.cpp_type(&f.as_type());
                 body.push_str(&format!(
-                    "                auto f{j} = Codec<{ty}>::read(reader);\n"
+                    "            auto f{j} = Codec<{ty}>::read(reader);\n"
                 ));
                 args.push(format!("std::move(f{j})"));
                 writes.push_str(&format!(
-                    "                Codec<{ty}>::write(writer, variant.{});\n",
-                    field(f.name(), j)
+                    "            Codec<{ty}>::write(writer, variant.{});\n",
+                    member(&field(f.name(), j), &vname)
                 ));
             }
             read.push_str(&format!(
-                "            case {}: {{\n{body}                return {full}({vfull}{{{}}});\n            }}\n",
+                "        case {}: {{\n{body}            return {full}({vfull}{{{}}});\n        }}\n",
                 i + 1,
                 args.join(", ")
             ));
             write.push_str(&format!(
-                "            case {i}: {{\n                const auto& variant = std::get<{i}>(value.variant);\n                (void)variant;\n                writer.write_int<int32_t>({});\n{writes}                return;\n            }}\n",
+                "        case {i}: {{\n            const auto& variant = std::get<{i}>(value.variant);\n            (void)variant;\n            writer.write_int<int32_t>({});\n{writes}            return;\n        }}\n",
                 i + 1
             ));
         }
-        format!(
-            "template <>\nstruct Codec<{full}> {{\n    static {full} read(Reader& reader) {{\n        switch (reader.read_int<int32_t>()) {{\n{read}            default: throw InternalError(\"unexpected enum case\");\n        }}\n    }}\n    static void write(Writer& writer, const {full}& value) {{\n        switch (value.variant.index()) {{\n{write}        }}\n        throw InternalError(\"unexpected enum value\");\n    }}\n}};\n\n"
-        )
+        read.push_str("        default: throw InternalError(\"unexpected enum case\");\n    }\n");
+        write.push_str("    }\n    throw InternalError(\"unexpected enum value\");\n");
+        self.value_codec(&full, &format!("const {full}&"), &read, &write)
     }
 
-    fn codec_error(&self, e: &Enum) -> String {
-        let full = self.outside_name(e.name());
+    /// Errors travel as `std::shared_ptr` to the base class, to keep the variant.
+    fn codec_error(&self, e: &Enum) -> Codec {
+        let base = self.local(e.name());
+        let full = format!("std::shared_ptr<{base}>");
         let name = class(e.name());
-        let mut cases = String::new();
+        let mut read = String::from("    switch (reader.read_int<int32_t>()) {\n");
         for (i, v) in e.variants().iter().enumerate() {
-            let vfull = format!("{}::{name}_{}", self.ns, class(v.name()));
+            let vfull = format!("::{}::{name}_{}", self.ns, class(v.name()));
             if e.is_flat() {
-                cases.push_str(&format!(
-                    "            case {}: throw {vfull}(Codec<std::string>::read(reader));\n",
+                read.push_str(&format!(
+                    "        case {}: return std::make_shared<{vfull}>(Codec<std::string>::read(reader));\n",
                     i + 1
                 ));
             } else {
                 let mut body = String::new();
                 let mut args = Vec::new();
                 for (j, f) in v.fields().iter().enumerate() {
-                    let ty = self.cpp_type_outside(&f.as_type());
+                    let ty = self.cpp_type(&f.as_type());
                     body.push_str(&format!(
-                        "                auto f{j} = Codec<{ty}>::read(reader);\n"
+                        "            auto f{j} = Codec<{ty}>::read(reader);\n"
                     ));
                     args.push(format!("std::move(f{j})"));
                 }
-                cases.push_str(&format!(
-                    "            case {}: {{\n{body}                throw {vfull}({});\n            }}\n",
+                read.push_str(&format!(
+                    "        case {}: {{\n{body}            return std::make_shared<{vfull}>({});\n        }}\n",
                     i + 1,
                     args.join(", ")
                 ));
             }
         }
-        format!(
-            "template <>\nstruct Codec<{full}> {{\n    /// Errors are thrown, never returned by value.\n    [[noreturn]] static void read_and_throw(Reader& reader) {{\n        switch (reader.read_int<int32_t>()) {{\n{cases}            default: throw InternalError(\"unexpected error variant\");\n        }}\n    }}\n    static void write(Writer& writer, const {full}& value) {{\n        writer.write_int<int32_t>(value.uniffi_variant_index());\n        value.uniffi_write_fields(writer);\n    }}\n}};\n\n"
-        )
+        read.push_str(
+            "        default: throw InternalError(\"unexpected error variant\");\n    }\n",
+        );
+        Codec {
+            declaration: format!(
+                "template <>\nstruct Codec<{full}> {{\n    static {full} read(Reader& reader);\n    static void write(Writer& writer, const {full}& value);\n    static void write_value(Writer& writer, const {base}& value) {{\n        writer.write_int<int32_t>(value.uniffi_variant_index());\n        value.uniffi_write_fields(writer);\n    }}\n}};\n\n"
+            ),
+            definition: format!(
+                "inline {full} Codec<{full}>::read(Reader& reader) {{\n{read}}}\n\ninline void Codec<{full}>::write(Writer& writer, const {full}& value) {{\n    if (!value) {{\n        throw InternalError(\"a null error cannot be passed to Rust\");\n    }}\n    write_value(writer, *value);\n}}\n\n"
+            ),
+        }
+    }
+
+    /// `uniffi_write_fields` of error variants, defined once the codecs of their fields are.
+    fn emit_error_field_writers(&self) -> String {
+        let mut out = String::new();
+        for e in self.ci.enum_definitions() {
+            if !self.is_error_enum(e.name()) {
+                continue;
+            }
+            let name = class(e.name());
+            for v in e.variants() {
+                let vname = format!("{name}_{}", class(v.name()));
+                let mut writes = String::new();
+                if !e.is_flat() {
+                    for (j, f) in v.fields().iter().enumerate() {
+                        let _ = writeln!(
+                            writes,
+                            "    uniffi::Codec<{}>::write(writer, {});",
+                            self.cpp_type(&f.as_type()),
+                            member(&field(f.name(), j), &vname)
+                        );
+                    }
+                }
+                let _ = writeln!(
+                    out,
+                    "inline void {}::{vname}::uniffi_write_fields(uniffi::Writer& writer) const {{\n    (void)writer;\n{writes}}}\n",
+                    self.ns
+                );
+            }
+        }
+        out
     }
 
     fn codec_handle(&self, name: &str) -> String {
-        let full = self.outside_name(name);
+        let full = self.local(name);
         let n = class(name);
         let ns = &self.ns;
         format!(
@@ -679,7 +799,7 @@ impl Gen<'_> {
             let Some(type_name) = &cfg.type_name else {
                 continue;
             };
-            let builtin_cpp = self.cpp_type_outside(builtin);
+            let builtin_cpp = self.cpp_type(builtin);
             if *type_name == builtin_cpp || !seen.insert(type_name.clone()) {
                 continue;
             }

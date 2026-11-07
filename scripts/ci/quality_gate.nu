@@ -49,7 +49,8 @@ def main [--skip-fmt, --skip-test, --skip-nu] {
     $ok = (run_step "versions agree" { nu scripts/ci/check_versions.nu }) and $ok
     $ok = (run_step "unused dependencies (cargo machete)" {
         nu scripts/tools.nu ensure cargo-machete
-        cargo machete
+        # fixtures/ holds vendored upstream crates; their dependencies are not ours to prune.
+        cargo machete crates fuzz
     }) and $ok
     if not $skip_nu {
         $ok = (run_step "nushell tests" { nu scripts/tests/run_all.nu }) and $ok

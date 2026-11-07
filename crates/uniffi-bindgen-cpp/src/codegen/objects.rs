@@ -5,7 +5,7 @@ use std::fmt::Write;
 
 use uniffi_bindgen::interface::Object;
 
-use super::names::{class, var};
+use super::names::{class, member};
 use super::types::Gen;
 
 impl Gen<'_> {
@@ -102,7 +102,7 @@ impl Gen<'_> {
                     Some(vec!["other.uniffi_clone_handle()".into()]),
                     4,
                 )
-                .replace("return result;", "return result < 0;");
+                .replace("return uniffi_result;", "return uniffi_result < 0;");
             let _ = writeln!(
                 out,
                 "bool {name}::operator<(const {name}& other) const {{\n{body}}}\n"
@@ -125,7 +125,7 @@ impl Gen<'_> {
             let _ = writeln!(
                 out,
                 "{} {{\n{}}}\n",
-                self.qualified_signature(c, &name, &var(c.name())),
+                self.qualified_signature(c, &name, &member(c.name(), obj.name())),
                 self.call_body(c, None, None, 4)
             );
         }
@@ -133,7 +133,7 @@ impl Gen<'_> {
             let _ = writeln!(
                 out,
                 "{} const {{\n{}}}\n",
-                self.qualified_signature(m, &name, &var(m.name())),
+                self.qualified_signature(m, &name, &member(m.name(), obj.name())),
                 self.call_body(m, Some("uniffi_clone_handle()"), None, 4)
             );
         }
@@ -155,7 +155,7 @@ impl Gen<'_> {
             let _ = writeln!(
                 out,
                 "    {} override {{\n{}    }}\n",
-                self.signature(m, &var(m.name()), false),
+                self.signature(m, &member(m.name(), obj.name()), false),
                 self.call_body(m, Some("uniffi_clone_handle()"), None, 8)
             );
         }

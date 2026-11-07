@@ -233,25 +233,45 @@ def "test deps_update: a crate kept at two versions is no downgrade" [] {
 
 def main [] { run-tests }
 
-use ../ci/cpp_e2e.nu [library_name compiler compile_args]
+use ../ci/cxx.nu
+use ../ci/cpp_e2e.nu [compile_args]
+use ../ci/fixtures.nu [cdylibs selected SKIP]
 
-def "test cpp_e2e: library file name per platform" [] {
-    assert equal (library_name "macos") "libtour.dylib"
-    assert equal (library_name "linux") "libtour.so"
-    assert equal (library_name "windows") "tour.dll"
+def "test cxx: library file name per platform" [] {
+    assert equal (cxx library_file "tour" "macos") "libtour.dylib"
+    assert equal (cxx library_file "tour" "linux") "libtour.so"
+    assert equal (cxx library_file "tour" "windows") "tour.dll"
 }
 
-def "test cpp_e2e: compiler choice" [] {
-    assert equal (compiler "" ["clang++" "g++"]) "clang++"
-    assert equal (compiler "icpx" ["g++"]) "icpx"
-    assert error { compiler "" [] }
+def "test cxx: compiler choice" [] {
+    assert equal (cxx compiler "" ["clang++" "g++"]) "clang++"
+    assert equal (cxx compiler "icpx" ["g++"]) "icpx"
+    assert error { cxx compiler "" [] }
+}
+
+def "test cxx: flags make warnings errors and add sanitizers on request" [] {
+    assert ("-Werror" in (cxx flags false))
+    assert ("-std=c++17" in (cxx flags false))
+    assert not ("-fsanitize=address,undefined" in (cxx flags false))
+    assert ("-fsanitize=address,undefined" in (cxx flags true))
 }
 
 def "test cpp_e2e: compile arguments" [] {
     let args = (compile_args "/o" "/l" "/o/t" false)
-    assert ("-std=c++17" in $args)
-    assert ("-Werror" in $args)
     assert ("/o/tour.cpp" in $args)
-    assert not ("-fsanitize=address,undefined" in $args)
-    assert ("-fsanitize=address,undefined" in (compile_args "/o" "/l" "/o/t" true))
+    assert ("-ltour" in $args)
+}
+
+def "test fixtures: cdylibs come from cargo metadata" [] {
+    let metadata = {packages: [
+        {manifest_path: "/f/a/Cargo.toml", targets: [{name: "a", crate_types: ["lib" "cdylib"]}]}
+        {manifest_path: "/f/b/Cargo.toml", targets: [{name: "b", crate_types: ["lib"]}]}
+    ]}
+    assert equal (cdylibs $metadata) [{name: "a", dir: "/f/a"}]
+}
+
+def "test fixtures: selection skips SKIP and honours --only" [] {
+    let libs = [{name: "a"} {name: ($SKIP | first)} {name: "b"}]
+    assert equal (selected $libs "" | get name) ["a" "b"]
+    assert equal (selected $libs "b" | get name) ["b"]
 }

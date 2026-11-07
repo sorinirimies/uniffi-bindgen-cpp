@@ -42,36 +42,45 @@ impl Gen<'_> {
                 .map_or_else(|| "void".to_owned(), |t| self.cpp_type(t));
             let (assign, ret_line) = match c.return_type() {
                 Some(t) => (
-                    "auto result = ",
-                    format!("{indent}        return {};\n", self.lift(t, "result")),
+                    "auto uniffi_result = ",
+                    format!(
+                        "{indent}        return {};\n",
+                        self.lift(t, "uniffi_result")
+                    ),
                 ),
                 None => ("", String::new()),
             };
             let _ = writeln!(
                 out,
-                "{indent}uint64_t future_handle = ffi::{ffi_name}({});",
+                "{indent}uint64_t uniffi_future = ffi::{ffi_name}({});",
                 args.join(", ")
             );
             let _ = writeln!(
                 out,
-                "{indent}return uniffi::detail::start_future<{ret_cpp}>(\n{indent}    future_handle, &ffi::{poll}, &ffi::{free},\n{indent}    [](uint64_t handle) -> {ret_cpp} {{\n{indent}        uniffi::RustCallStatus status{{}};\n{indent}        {assign}ffi::{complete}(handle, &status);\n{indent}        uniffi_detail::check_status(status{thrower});\n{ret_line}{indent}    }});",
+                "{indent}return uniffi::detail::start_future<{ret_cpp}>(\n{indent}    uniffi_future, &ffi::{poll}, &ffi::{free},\n{indent}    [](uint64_t uniffi_handle) -> {ret_cpp} {{\n{indent}        uniffi::RustCallStatus uniffi_status{{}};\n{indent}        {assign}ffi::{complete}(uniffi_handle, &uniffi_status);\n{indent}        uniffi_detail::check_status(uniffi_status{thrower});\n{ret_line}{indent}    }});",
                 poll = c.ffi_rust_future_poll(self.ci),
                 free = c.ffi_rust_future_free(self.ci),
                 complete = c.ffi_rust_future_complete(self.ci),
             );
         } else {
-            args.push("&status".to_owned());
+            args.push("&uniffi_status".to_owned());
             let call = format!("ffi::{ffi_name}({})", args.join(", "));
-            let _ = writeln!(out, "{indent}uniffi::RustCallStatus status{{}};");
+            let _ = writeln!(out, "{indent}uniffi::RustCallStatus uniffi_status{{}};");
             match c.return_type() {
                 Some(t) => {
-                    let _ = writeln!(out, "{indent}auto result = {call};");
-                    let _ = writeln!(out, "{indent}uniffi_detail::check_status(status{thrower});");
-                    let _ = writeln!(out, "{indent}return {};", self.lift(t, "result"));
+                    let _ = writeln!(out, "{indent}auto uniffi_result = {call};");
+                    let _ = writeln!(
+                        out,
+                        "{indent}uniffi_detail::check_status(uniffi_status{thrower});"
+                    );
+                    let _ = writeln!(out, "{indent}return {};", self.lift(t, "uniffi_result"));
                 }
                 None => {
                     let _ = writeln!(out, "{indent}{call};");
-                    let _ = writeln!(out, "{indent}uniffi_detail::check_status(status{thrower});");
+                    let _ = writeln!(
+                        out,
+                        "{indent}uniffi_detail::check_status(uniffi_status{thrower});"
+                    );
                 }
             }
         }

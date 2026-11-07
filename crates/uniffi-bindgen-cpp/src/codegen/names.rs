@@ -128,6 +128,21 @@ pub(crate) fn class(name: &str) -> String {
     escape(name)
 }
 
+/// Names of members the generated classes declare themselves.
+const RESERVED_MEMBERS: &[&str] = &["uniffi_clone_handle", "handle_", "variant", "Variant"];
+
+/// A member (method, field or nested type) of the C++ class `owner`. Escaped like
+/// [`var`], plus a trailing `_` when it would clash with the class itself (C++ reads a
+/// member named like its class as a constructor) or with a member the bindings declare.
+pub(crate) fn member(name: &str, owner: &str) -> String {
+    let escaped = escape(name);
+    if escaped == escape(owner) || RESERVED_MEMBERS.contains(&escaped.as_str()) {
+        format!("{escaped}_")
+    } else {
+        escaped
+    }
+}
+
 /// Field name inside a variant: nameless fields become `v0`, `v1`, ...
 pub(crate) fn field(name: &str, index: usize) -> String {
     if name.is_empty() {

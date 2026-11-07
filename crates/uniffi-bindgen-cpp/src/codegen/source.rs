@@ -74,7 +74,7 @@ impl Gen<'_> {
                     out,
                     "{}",
                     fill(
-                        "[[noreturn]] void throw_buf_@name@(uniffi::RustBuffer buffer) {\n    BufferGuard guard{buffer};\n    uniffi::Reader reader(buffer.data, static_cast<size_t>(buffer.len));\n    uniffi::Codec<@ns@::@name@>::read_and_throw(reader);\n}\n",
+                        "[[noreturn]] void throw_buf_@name@(uniffi::RustBuffer buffer) {\n    BufferGuard guard{buffer};\n    uniffi::Reader reader(buffer.data, static_cast<size_t>(buffer.len));\n    uniffi::Codec<std::shared_ptr<::@ns@::@name@>>::read(reader)->uniffi_throw();\n}\n",
                         &[("name", &name), ("ns", ns)],
                     )
                 );
@@ -175,6 +175,13 @@ T lift_buf(uniffi::RustBuffer buffer) {
         throw uniffi::InternalError("the buffer still has data after lifting its containing value");
     }
     return value;
+}
+
+template <class E>
+uniffi::RustBuffer lower_error(const E& error) {
+    uniffi::Writer writer;
+    uniffi::Codec<std::shared_ptr<E>>::write_value(writer, error);
+    return buffer_from_bytes(writer.bytes().data(), writer.bytes().size());
 }
 
 [[maybe_unused]] uniffi::RustBuffer lower_string(const std::string& value) {

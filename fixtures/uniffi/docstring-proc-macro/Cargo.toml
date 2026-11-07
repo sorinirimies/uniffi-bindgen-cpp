@@ -1,0 +1,18 @@
+[package]
+name = "uniffi-fixture-docstring-proc-macro"
+version = "0.22.0"
+edition = "2021"
+license = "MPL-2.0"
+publish = false
+
+[lib]
+name = "uniffi_fixture_docstring_proc_macro"
+crate-type = ["lib", "cdylib"]
+
+[dependencies]
+cargo_metadata = { version = "0.19" }
+thiserror = "2"
+uniffi = { workspace = true }
+
+[build-dependencies]
+uniffi = { workspace = true, features = ["build"] }

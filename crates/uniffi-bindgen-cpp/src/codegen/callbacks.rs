@@ -5,18 +5,18 @@ use std::fmt::Write;
 
 use uniffi_bindgen::interface::{AsType, FfiCallbackFunction, Method, Type};
 
-use super::names::var;
+use super::names::member;
 use super::types::Gen;
 
 impl Gen<'_> {
     /// The `catch` clauses that turn a C++ exception into a call status.
     fn catch_clauses(&self, m: &Method, status: &str, pad: &str) -> String {
         let mut out = String::new();
-        if let Some(t @ Type::Enum { .. }) = m.throws_type() {
-            let err = self.cpp_type(t);
+        if let Some(t @ Type::Enum { name, .. }) = m.throws_type() {
+            let err = self.named(t, name);
             let _ = writeln!(
                 out,
-                "{pad}}} catch (const {err}& error) {{\n{pad}    {status}.code = uniffi::CALL_ERROR;\n{pad}    {status}.error_buf = uniffi_detail::lower_buf<{err}>(error);"
+                "{pad}}} catch (const {err}& error) {{\n{pad}    {status}.code = uniffi::CALL_ERROR;\n{pad}    {status}.error_buf = uniffi_detail::lower_error(error);"
             );
         }
         let _ = writeln!(
@@ -65,7 +65,7 @@ impl Gen<'_> {
         m: &Method,
     ) -> String {
         let args = self.lifted_args(m);
-        let method = var(m.name());
+        let method = member(m.name(), name);
         let (call, write) = match m.return_type() {
             Some(t) => (
                 format!("auto result = object->{method}({args});"),
@@ -94,7 +94,7 @@ impl Gen<'_> {
         m: &Method,
     ) -> String {
         let args = self.lifted_args(m);
-        let method = var(m.name());
+        let method = member(m.name(), name);
         let result_struct = m.foreign_future_ffi_result_struct().name().to_owned();
         let ret_cpp = m
             .return_type()
