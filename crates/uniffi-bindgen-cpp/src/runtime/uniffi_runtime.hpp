@@ -425,6 +425,70 @@ private:
 struct HandleTag {};
 
 // ---------------------------------------------------------------------------
+// Value equality: what the field-wise `==` of records and enums uses. Objects
+// are compared through their own `==` (the Rust `Eq`) when they have one, and by
+// identity otherwise; containers compare their elements the same way.
+// ---------------------------------------------------------------------------
+
+template <class T, class = void>
+struct HasEqual : std::false_type {};
+
+template <class T>
+struct HasEqual<T, std::void_t<decltype(std::declval<const T&>() == std::declval<const T&>())>>
+    : std::true_type {};
+
+template <class T>
+bool equal(const T& a, const T& b) {
+    return a == b;
+}
+
+template <class T>
+bool equal(const std::shared_ptr<T>& a, const std::shared_ptr<T>& b) {
+    if (a == b) {
+        return true;
+    }
+    if constexpr (HasEqual<T>::value) {
+        return a && b && *a == *b;
+    } else {
+        return false;
+    }
+}
+
+template <class T>
+bool equal(const std::optional<T>& a, const std::optional<T>& b) {
+    if (a.has_value() != b.has_value()) {
+        return false;
+    }
+    return !a.has_value() || equal(*a, *b);
+}
+
+template <class T>
+bool equal(const std::vector<T>& a, const std::vector<T>& b) {
+    if (a.size() != b.size()) {
+        return false;
+    }
+    for (size_t i = 0; i < a.size(); ++i) {
+        if (!equal(a[i], b[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+template <class K, class V>
+bool equal(const std::map<K, V>& a, const std::map<K, V>& b) {
+    if (a.size() != b.size()) {
+        return false;
+    }
+    for (auto ia = a.begin(), ib = b.begin(); ia != a.end(); ++ia, ++ib) {
+        if (!(ia->first == ib->first) || !equal(ia->second, ib->second)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// ---------------------------------------------------------------------------
 // Async: Rust futures become `std::future`. A single background thread polls
 // them, so a wake-up from a Rust thread never re-enters Rust.
 // ---------------------------------------------------------------------------

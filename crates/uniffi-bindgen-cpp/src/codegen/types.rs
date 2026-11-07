@@ -1,8 +1,10 @@
 //! Mapping UniFFI types to C++: type names, FFI types, lifting, lowering and
 //! default values.
 
+use std::collections::BTreeSet;
+
 use uniffi_bindgen::ComponentInterface;
-use uniffi_bindgen::interface::{DefaultValue, FfiType, Literal, Radix, Type};
+use uniffi_bindgen::interface::{Callable, DefaultValue, FfiType, Literal, Radix, Type};
 
 use super::names::{class, member, string_literal};
 use crate::config::{Config, CustomTypeConfig};
@@ -14,14 +16,26 @@ pub(crate) struct Gen<'a> {
     pub(crate) config: &'a Config,
     /// C++ namespace of the generated code.
     pub(crate) ns: String,
+    /// Names of the error types of the other components generated alongside this one:
+    /// an external type is an error if its own component says so.
+    external_errors: &'a BTreeSet<String>,
+    /// Names of the types this component's callables throw. UniFFI does not count a
+    /// trait object (`Arc<dyn Trait>`) as an error, so collect them here.
+    thrown: BTreeSet<String>,
 }
 
 impl<'a> Gen<'a> {
-    pub(crate) fn new(ci: &'a ComponentInterface, config: &'a Config) -> Self {
+    pub(crate) fn new(
+        ci: &'a ComponentInterface,
+        config: &'a Config,
+        external_errors: &'a BTreeSet<String>,
+    ) -> Self {
         Self {
             ci,
             config,
             ns: config.namespace_for(ci.namespace()),
+            external_errors,
+            thrown: thrown_type_names(ci),
         }
     }
 
@@ -133,15 +147,15 @@ impl<'a> Gen<'a> {
     }
 
     pub(crate) fn is_error_enum(&self, name: &str) -> bool {
-        self.ci.get_enum_definition(name).is_some() && self.ci.is_name_used_as_error(name)
+        self.ci.get_object_definition(name).is_none()
+            && self.ci.get_record_definition(name).is_none()
+            && (self.ci.is_name_used_as_error(name) || self.external_errors.contains(name))
     }
 
     /// An object that Rust functions return as their error.
     pub(crate) fn is_error_object(&self, name: &str) -> bool {
-        self.ci.get_object_definition(name).is_some_and(|o| {
-            !(o.is_trait_interface() || o.has_callback_interface())
-                && self.ci.is_name_used_as_error(name)
-        })
+        self.ci.get_object_definition(name).is_some()
+            && (self.ci.is_name_used_as_error(name) || self.thrown.contains(name))
     }
 
     /// The C++ spelling of an FFI-level type, for code outside the FFI namespace.
@@ -332,4 +346,31 @@ fn module_path_of(t: &Type) -> Option<&str> {
         | Type::Custom { module_path, .. } => Some(module_path),
         _ => None,
     }
+}
+
+/// The names of every type a function, method or constructor of `ci` throws.
+fn thrown_type_names(ci: &ComponentInterface) -> BTreeSet<String> {
+    let mut names = BTreeSet::new();
+    let mut add = |c: &dyn Callable| {
+        if let Some(Type::Object { name, .. } | Type::Enum { name, .. }) = c.throws_type() {
+            names.insert(name.clone());
+        }
+    };
+    ci.function_definitions().iter().for_each(|f| add(f));
+    for o in ci.object_definitions() {
+        o.constructors().into_iter().for_each(|c| add(c));
+        o.methods().into_iter().for_each(|m| add(m));
+    }
+    for r in ci.record_definitions() {
+        r.constructors().iter().for_each(|c| add(c));
+        r.methods().iter().for_each(|m| add(m));
+    }
+    for e in ci.enum_definitions() {
+        e.constructors().iter().for_each(|c| add(c));
+        e.methods().iter().for_each(|m| add(m));
+    }
+    for cb in ci.callback_interface_definitions() {
+        cb.methods().into_iter().for_each(|m| add(m));
+    }
+    names
 }

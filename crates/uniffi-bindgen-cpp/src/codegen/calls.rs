@@ -89,12 +89,20 @@ impl Gen<'_> {
 
     /// `, &throw_buf_Err` for callables that throw an error enum.
     fn thrower(&self, c: &dyn Callable) -> String {
-        match c.throws_type() {
-            Some(t @ (Type::Enum { name, .. } | Type::Object { name, .. })) => format!(
+        c.throws_type()
+            .map(|t| self.thrower_for(t))
+            .unwrap_or_default()
+    }
+
+    /// A custom type is thrown as the error type it wraps.
+    fn thrower_for(&self, t: &Type) -> String {
+        match t {
+            Type::Enum { name, .. } | Type::Object { name, .. } => format!(
                 ", &{}uniffi_detail::throw_buf_{}",
                 self.qualifier(t),
                 class(name)
             ),
+            Type::Custom { builtin, .. } => self.thrower_for(builtin),
             _ => String::new(),
         }
     }

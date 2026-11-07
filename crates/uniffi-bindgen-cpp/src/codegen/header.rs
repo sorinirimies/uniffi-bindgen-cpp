@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 use std::fmt::Write;
 
 use uniffi_bindgen::interface::{
-    AsType, Callable, CallbackInterface, Enum, Literal, Object, Record, Type,
+    AsType, Callable, CallbackInterface, DefaultValue, Enum, Literal, Object, Record, Type,
 };
 
 use super::names::{class, doc, field, member, var};
@@ -268,11 +268,13 @@ impl Gen<'_> {
             let _ = writeln!(out, "    struct {vname} {{");
             for (i, f) in v.fields().iter().enumerate() {
                 out.push_str(&doc(f.docstring(), 8));
+                let ty = f.as_type();
                 let _ = writeln!(
                     out,
-                    "        {} {};",
-                    self.cpp_type(&f.as_type()),
-                    member(&field(f.name(), i), &vname)
+                    "        {} {}{};",
+                    self.cpp_type(&ty),
+                    member(&field(f.name(), i), &vname),
+                    self.initializer(f.default_value(), &ty)
                 );
             }
             if fieldwise_eq {
@@ -294,7 +296,12 @@ impl Gen<'_> {
             alternatives.join(", ")
         );
         let _ = writeln!(out, "    Variant variant;\n");
-        let _ = writeln!(out, "    {name}() = default;");
+        // Not `= default`: a nested struct with default member initializers is not
+        // default-constructible until this class is complete, which deletes it.
+        let _ = writeln!(
+            out,
+            "    /// Holds the first variant.\n    {name}() : variant(std::in_place_index<0>) {{}}"
+        );
         let _ = writeln!(
             out,
             "    template <class V, class = std::enable_if_t<\n            std::is_constructible_v<Variant, V&&> &&\n            !std::is_same_v<std::decay_t<V>, {name}>>>\n    {name}(V&& value) : variant(std::forward<V>(value)) {{}}\n"
@@ -316,16 +323,12 @@ impl Gen<'_> {
         for f in r.fields() {
             out.push_str(&doc(f.docstring(), 4));
             let ty = f.as_type();
-            let default = f
-                .default_value()
-                .and_then(|d| self.default_value(d, &ty))
-                .map(|d| format!(" = {d}"))
-                .unwrap_or_default();
             let _ = writeln!(
                 out,
-                "    {} {}{default};",
+                "    {} {}{};",
                 self.cpp_type(&ty),
-                member(f.name(), r.name())
+                member(f.name(), r.name()),
+                self.initializer(f.default_value(), &ty)
             );
         }
         if let Some(v) = self.value_type(r.name()) {
@@ -341,7 +344,13 @@ impl Gen<'_> {
         let members = self
             .value_type(e.name())
             .filter(|v| v.kind == ValueKind::Error)
-            .map(|v| self.value_member_declarations(&v))
+            .map(|v| {
+                let mut members = self.value_member_declarations(&v);
+                if v.traits.display_fmt.is_some() {
+                    members.push_str("    /// The Rust `Display` text.\n    const char* what() const noexcept override;\n\nprivate:\n    mutable std::string what_;\n");
+                }
+                members
+            })
             .unwrap_or_default();
         let mut out = doc(e.docstring(), 0);
         let _ = writeln!(
@@ -389,6 +398,14 @@ impl Gen<'_> {
             );
         }
         out
+    }
+
+    /// ` = default` for a field with a default value, else `{}` so that a
+    /// default-constructed record is never left uninitialized.
+    fn initializer(&self, default: Option<&DefaultValue>, ty: &Type) -> String {
+        default
+            .and_then(|d| self.default_value(d, ty))
+            .map_or_else(|| "{}".to_owned(), |d| format!(" = {d}"))
     }
 
     /// `R name(args)` with default arguments (header) or without (source).
@@ -456,7 +473,21 @@ impl Gen<'_> {
         let mut out = doc(obj.docstring(), 0);
         let abstract_class = obj.is_trait_interface() || obj.has_callback_interface();
         let traits = obj.uniffi_trait_methods();
-        if abstract_class {
+        if abstract_class && self.is_error_object(obj.name()) {
+            // A trait used as an error: implementations are exceptions.
+            let _ = writeln!(
+                out,
+                "class {name} : public uniffi::Exception {{\nprotected:\n    {name}() : uniffi::Exception(\"{name}\") {{}}\n    {name}(const {name}&) = default;\n\npublic:\n    ~{name}() override = default;"
+            );
+            for m in obj.methods() {
+                out.push_str(&doc(m.docstring(), 4));
+                let _ = writeln!(
+                    out,
+                    "    virtual {} = 0;",
+                    self.signature(m, &member(m.name(), obj.name()), false)
+                );
+            }
+        } else if abstract_class {
             let _ = writeln!(
                 out,
                 "class {name} {{\npublic:\n    virtual ~{name}() = default;"

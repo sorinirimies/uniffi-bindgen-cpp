@@ -370,6 +370,9 @@ impl Gen<'_> {
                 &this,
                 &self.lower_value(&v, "other"),
             ));
+            if v.kind == ValueKind::Error && v.traits.display_fmt.is_some() {
+                out.push_str(&what_from_display(&name));
+            }
         }
         out
     }
@@ -469,17 +472,22 @@ impl Gen<'_> {
     }
 }
 
-/// `return std::tie(a, b) == std::tie(uniffi_other.a, uniffi_other.b);`, or `true`
-/// without fields. The parameter is prefixed so a field called `other` cannot hide it.
+/// `what()` of an exception class: its `Display` text, computed on first use.
+pub(crate) fn what_from_display(name: &str) -> String {
+    format!(
+        "const char* {name}::what() const noexcept {{\n    if (what_.empty()) {{\n        try {{\n            what_ = to_string();\n        }} catch (...) {{\n            what_ = \"{name}\";\n        }}\n    }}\n    return what_.c_str();\n}}\n\n"
+    )
+}
+
+/// `return uniffi::equal(a, uniffi_other.a) && ...;`, or `true` without fields. The
+/// parameter is prefixed so a field called `other` cannot hide it.
 fn fieldwise(fields: &[String]) -> String {
     if fields.is_empty() {
         return "(void)uniffi_other;\n    return true;".to_owned();
     }
-    let ours: Vec<String> = fields.iter().map(|f| format!("this->{f}")).collect();
-    let theirs: Vec<String> = fields.iter().map(|f| format!("uniffi_other.{f}")).collect();
-    format!(
-        "return std::tie({}) == std::tie({});",
-        ours.join(", "),
-        theirs.join(", ")
-    )
+    let checks: Vec<String> = fields
+        .iter()
+        .map(|f| format!("uniffi::equal(this->{f}, uniffi_other.{f})"))
+        .collect();
+    format!("return {};", checks.join("\n        && "))
 }

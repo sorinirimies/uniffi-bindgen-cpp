@@ -83,9 +83,14 @@ impl Gen<'_> {
         for obj in self.ci.object_definitions() {
             if self.is_error_object(obj.name()) {
                 let name = class(obj.name());
+                let thrown = if obj.is_trait_interface() || obj.has_callback_interface() {
+                    format!("{name}RustImpl(handle)")
+                } else {
+                    format!("::{ns}::{name}(uniffi::HandleTag{{}}, handle)")
+                };
                 let _ = writeln!(
                     out,
-                    "[[noreturn]] void throw_buf_{name}(uniffi::RustBuffer buffer) {{\n    BufferGuard guard{{buffer}};\n    uniffi::Reader reader(buffer.data, static_cast<size_t>(buffer.len));\n    throw ::{ns}::{name}(uniffi::HandleTag{{}}, reader.read_int<uint64_t>());\n}}\n"
+                    "[[noreturn]] void throw_buf_{name}(uniffi::RustBuffer buffer) {{\n    BufferGuard guard{{buffer}};\n    uniffi::Reader reader(buffer.data, static_cast<size_t>(buffer.len));\n    uint64_t handle = reader.read_int<uint64_t>();\n    throw {thrown};\n}}\n"
                 );
             }
         }

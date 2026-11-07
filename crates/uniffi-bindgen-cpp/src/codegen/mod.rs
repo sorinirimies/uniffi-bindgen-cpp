@@ -10,6 +10,8 @@ mod source;
 mod types;
 mod values;
 
+use std::collections::BTreeSet;
+
 use anyhow::{Context, Result};
 use camino::Utf8Path;
 use uniffi_bindgen::{BindingGenerator, Component, ComponentInterface, GenerationSettings};
@@ -38,7 +40,16 @@ pub struct GeneratedFiles {
 
 /// Generates the C++ files for one component.
 pub fn generate_component(ci: &ComponentInterface, config: &Config) -> GeneratedFiles {
-    let generator = Gen::new(ci, config);
+    generate_with_errors(ci, config, &BTreeSet::new())
+}
+
+/// [`generate_component`], knowing the error types of the other components.
+fn generate_with_errors(
+    ci: &ComponentInterface,
+    config: &Config,
+    external_errors: &BTreeSet<String>,
+) -> GeneratedFiles {
+    let generator = Gen::new(ci, config, external_errors);
     let stem = ci.namespace();
     let header_name = format!("{stem}.hpp");
     GeneratedFiles {
@@ -89,8 +100,19 @@ impl BindingGenerator for CppBindingGenerator {
         components: &[Component<Config>],
     ) -> Result<()> {
         write_runtime(&settings.out_dir)?;
+        let errors: BTreeSet<String> = components
+            .iter()
+            .flat_map(|c| {
+                c.ci.enum_definitions()
+                    .iter()
+                    .map(|e| e.name())
+                    .filter(|n| c.ci.is_name_used_as_error(n))
+                    .map(str::to_owned)
+                    .collect::<Vec<_>>()
+            })
+            .collect();
         for component in components {
-            let files = generate_component(&component.ci, &component.config);
+            let files = generate_with_errors(&component.ci, &component.config, &errors);
             write_file(&settings.out_dir, &files.header_name, &files.header)?;
             write_file(&settings.out_dir, &files.source_name, &files.source)?;
             if settings.try_format_code {

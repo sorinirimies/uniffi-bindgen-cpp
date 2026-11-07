@@ -83,10 +83,7 @@ impl Gen<'_> {
             );
         }
         if self.is_error_object(obj.name()) && obj.uniffi_trait_methods().display_fmt.is_some() {
-            let _ = writeln!(
-                out,
-                "const char* {name}::what() const noexcept {{\n    if (what_.empty()) {{\n        try {{\n            what_ = to_string();\n        }} catch (...) {{\n            what_ = \"{name}\";\n        }}\n    }}\n    return what_.c_str();\n}}\n"
-            );
+            out.push_str(&super::values::what_from_display(&name));
         }
         out.push_str(&self.trait_definitions(
             &name,
@@ -103,9 +100,17 @@ impl Gen<'_> {
         let impl_name = format!("{name}RustImpl");
         let (free, clone) = self.free_and_clone(obj, &name, 8);
         let mut out = String::new();
+        // Thrown when the trait is an error type, so then a copy is a new reference.
+        let copy = if self.is_error_object(obj.name()) {
+            format!(
+                "{impl_name}(const {impl_name}& other) : {name}(other), handle_(other.uniffi_clone_handle()) {{}}"
+            )
+        } else {
+            format!("{impl_name}(const {impl_name}&) = delete;")
+        };
         let _ = writeln!(
             out,
-            "class {impl_name} final : public {name} {{\npublic:\n    explicit {impl_name}(uint64_t handle) : handle_(handle) {{}}\n    {impl_name}(const {impl_name}&) = delete;\n    {impl_name}& operator=(const {impl_name}&) = delete;\n    ~{impl_name}() override {{\n{free}    }}\n\n    uint64_t uniffi_clone_handle() const {{\n{clone}    }}\n"
+            "class {impl_name} final : public {name} {{\npublic:\n    explicit {impl_name}(uint64_t handle) : handle_(handle) {{}}\n    {copy}\n    {impl_name}& operator=(const {impl_name}&) = delete;\n    ~{impl_name}() override {{\n{free}    }}\n\n    uint64_t uniffi_clone_handle() const {{\n{clone}    }}\n"
         );
         for m in obj.methods() {
             let _ = writeln!(
