@@ -4,6 +4,12 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.1.1](https://github.com/sorinirimies/uniffi-bindgen-cpp/compare/v0.1.0...v0.1.1) — 2026-11-07
+
+### 🐛 Bug fixes
+
+- Generated code compiles with -Werror when a component has no functions ([`6850764`](https://github.com/sorinirimies/uniffi-bindgen-cpp/commit/68507643b9e60864f4d90596032239fb937cfeb9))
+
 ## [0.1.0](https://github.com/sorinirimies/uniffi-bindgen-cpp/releases/tag/v0.1.0) — 2026-11-07
 
 ### ✨ Features
