@@ -53,6 +53,14 @@ test:
 e2e *args:
     nu scripts/ci/cpp_e2e.nu {{ args }}
 
+# uniffi's fixture suite: generate, compile with -Werror, run (args: --sanitize, --only <lib>)
+fixtures *args:
+    nu scripts/ci/fixtures.nu {{ args }}
+
+# Build and test the CMake examples (args: --stem-mqtt <checkout>)
+cmake *args:
+    nu scripts/ci/cmake_examples.nu {{ args }}
+
 # Nushell script tests
 test-nu:
     nu scripts/tests/run_all.nu

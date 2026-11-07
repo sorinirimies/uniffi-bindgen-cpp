@@ -74,7 +74,7 @@ impl Gen<'_> {
                     out,
                     "{}",
                     fill(
-                        "[[noreturn]] void throw_buf_@name@(uniffi::RustBuffer buffer) {\n    BufferGuard guard{buffer};\n    uniffi::Reader reader(buffer.data, static_cast<size_t>(buffer.len));\n    uniffi::Codec<std::shared_ptr<::@ns@::@name@>>::read(reader)->uniffi_throw();\n}\n",
+                        "[[noreturn]] void throw_buf_@name@(uniffi::RustBuffer buffer) {\n    BufferGuard guard{buffer};\n    uniffi::Reader reader(buffer.data, static_cast<size_t>(buffer.len));\n    uniffi::Codec<std::shared_ptr<::@ns@::@name@>>::read(reader)->uniffi_throw();\n    std::abort();  // not reached; GCC does not take [[noreturn]] from a virtual call\n}\n",
                         &[("name", &name), ("ns", ns)],
                     )
                 );

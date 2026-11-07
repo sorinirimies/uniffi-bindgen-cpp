@@ -62,7 +62,7 @@ lower = "urllib.parse.urlunparse({})"
 
 # Added for uniffi-bindgen-cpp: exercises custom type mappings.
 [bindings.cpp.custom_types.TimeIntervalMs]
-type_name = "std::chrono::system_clock::time_point"
+type_name = "std::chrono::milliseconds"
 includes = ["<chrono>"]
-lift = "std::chrono::system_clock::time_point(std::chrono::milliseconds({}))"
-lower = "std::chrono::duration_cast<std::chrono::milliseconds>({}.time_since_epoch()).count()"
+lift = "std::chrono::milliseconds({})"
+lower = "{}.count()"
