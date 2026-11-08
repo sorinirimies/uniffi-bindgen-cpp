@@ -8,6 +8,7 @@ use ../ci/deps_update.nu [present commit_message series lock_versions downgrades
 use ../ci/publish_crate.nu [already_published package_args]
 use ../ci/apt.nu [commands]
 use ../ci/clang_tidy.nu [tidy_args]
+use ../ci/install_clang_tidy.nu [wheel_tag wheel_url]
 use ../ci/check_static.nu [is_static]
 use ../ci/prune_releases.nu [from_gh from_gitea doomed newest]
 use ../ci/gitea_release.nu [release_payload]
@@ -236,6 +237,22 @@ def "test clang_tidy: C++17, the bindings, and the SDK on macOS only" [] {
     assert equal (tidy_args "/o" "linux") ["--" "-std=c++17" "-I/o"]
     assert equal (tidy_args "/o" "macos" "/sdk") ["--" "-std=c++17" "-I/o" "-isysroot" "/sdk"]
     assert equal (tidy_args "/o" "linux" "/sdk") ["--" "-std=c++17" "-I/o"]
+}
+
+def "test install_clang_tidy: one wheel per runner platform" [] {
+    assert equal (wheel_tag "linux" "x86_64") "manylinux_2_27_x86_64"
+    assert equal (wheel_tag "macos" "aarch64") "macosx_11_0_arm64"
+    assert error { wheel_tag "windows" "x86_64" }
+}
+
+def "test install_clang_tidy: the wheel is picked by tag, never the sdist" [] {
+    let files = [
+        {filename: "clang_tidy-1.tar.gz", url: "sdist"}
+        {filename: "clang_tidy-1-py2.py3-none-musllinux_1_2_x86_64.whl", url: "musl"}
+        {filename: "clang_tidy-1-py2.py3-none-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", url: "gnu"}
+    ]
+    assert equal (wheel_url $files "manylinux_2_27_x86_64") "gnu"
+    assert error { wheel_url $files "macosx_11_0_arm64" }
 }
 
 def main [] { run-tests }

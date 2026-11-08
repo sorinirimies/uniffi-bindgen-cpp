@@ -42,8 +42,8 @@ jobs:
         run: nu scripts/ci/apt.nu
       - name: Quality gate
         run: nu scripts/ci/quality_gate.nu
-      - name: Install clang-tidy
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends clang-tidy
+      - name: Install clang-tidy (pinned, the same on both forges)
+        run: nu scripts/ci/install_clang_tidy.nu
       - name: clang-tidy on the generated C++
         run: nu scripts/ci/clang_tidy.nu
 
