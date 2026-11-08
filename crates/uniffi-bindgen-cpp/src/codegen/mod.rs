@@ -78,7 +78,24 @@ pub fn generate_from_udl(udl: &str, crate_name: &str, config: &Config) -> Result
 
 /// UniFFI plugs into binding generators through this trait.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct CppBindingGenerator;
+pub struct CppBindingGenerator {
+    exceptions: Option<bool>,
+}
+
+impl CppBindingGenerator {
+    /// The generator, configured by each crate's `uniffi.toml`.
+    pub const fn new() -> Self {
+        Self { exceptions: None }
+    }
+
+    /// Overrides `exceptions` of every component: `false` for bindings that build
+    /// with `-fno-exceptions`.
+    pub const fn with_exceptions(self, exceptions: bool) -> Self {
+        Self {
+            exceptions: Some(exceptions),
+        }
+    }
+}
 
 impl BindingGenerator for CppBindingGenerator {
     type Config = Config;
@@ -93,6 +110,9 @@ impl BindingGenerator for CppBindingGenerator {
         components: &mut Vec<Component<Config>>,
     ) -> Result<()> {
         for component in components.iter_mut() {
+            if let Some(exceptions) = self.exceptions {
+                component.config.exceptions = exceptions;
+            }
             if component.config.cdylib_name.is_none() {
                 component.config.cdylib_name = settings.cdylib.clone();
             }

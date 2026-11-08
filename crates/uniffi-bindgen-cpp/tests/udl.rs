@@ -160,29 +160,91 @@ fn cxx_compiler() -> Option<&'static str> {
     })
 }
 
-/// Compiles `files` with the system C++ compiler (warnings are errors). Returns
-/// `false` when there is no compiler, so the caller can skip.
-fn compiles(files: &GeneratedFiles) -> bool {
+/// Compiles `files` with the system C++ compiler (warnings are errors) and `extra`
+/// flags. `None` when there is no compiler, so the caller can skip.
+fn compile(files: &GeneratedFiles, extra: &[&str]) -> Option<std::process::Output> {
     let Some(compiler) = cxx_compiler() else {
         eprintln!("no C++ compiler found, skipping");
-        return false;
+        return None;
     };
     let dir = tempfile::tempdir().expect("temp dir");
     let path = |name: &str| dir.path().join(name);
     std::fs::write(path(RUNTIME_HEADER_NAME), RUNTIME_HEADER).expect("write runtime");
     std::fs::write(path(&files.header_name), &files.header).expect("write header");
     std::fs::write(path(&files.source_name), &files.source).expect("write source");
-    let out = Command::new(compiler)
-        .args(["-std=c++17", "-Wall", "-Wextra", "-Werror", "-fsyntax-only"])
-        .arg(path(&files.source_name))
-        .output()
-        .expect("run the compiler");
+    Some(
+        Command::new(compiler)
+            .args(["-std=c++17", "-Wall", "-Wextra", "-Werror", "-fsyntax-only"])
+            .args(extra)
+            .arg(path(&files.source_name))
+            .output()
+            .expect("run the compiler"),
+    )
+}
+
+/// `compile` that must succeed. Returns `false` when there is no compiler.
+fn compiles(files: &GeneratedFiles) -> bool {
+    compiles_with(files, &[])
+}
+
+fn compiles_with(files: &GeneratedFiles, extra: &[&str]) -> bool {
+    let Some(out) = compile(files, extra) else {
+        return false;
+    };
     assert!(
         out.status.success(),
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
     true
+}
+
+fn generate_without_exceptions() -> GeneratedFiles {
+    let config = Config {
+        exceptions: false,
+        ..Config::default()
+    };
+    generate_from_udl(UDL, "sample", &config).expect("generates")
+}
+
+#[test]
+fn without_exceptions_rust_errors_come_back_in_a_result() {
+    let files = generate_without_exceptions();
+    let h = &files.header;
+    for expected in [
+        "uniffi::Result<std::string, std::shared_ptr<::sample::Oops>> risky(std::string_view s);",
+        "uniffi::Result<void, std::shared_ptr<::sample::Oops>> check() const;",
+        // A C++ implementation returns the error instead of throwing it.
+        "virtual uniffi::Result<uint32_t, std::shared_ptr<::sample::Oops>> count() = 0;",
+        "std::shared_ptr<::sample::Oops> lift_error_Oops(uniffi::RustBuffer buffer);",
+        "std::shared_ptr<::sample::Detailed> lift_error_Detailed(uniffi::RustBuffer buffer);",
+        // Calls without a Rust error keep their plain types.
+        "uint32_t add(uint32_t a, uint32_t b);",
+        "uniffi::Future<std::string> fetch(std::string_view key);",
+    ] {
+        assert!(h.contains(expected), "missing `{expected}`");
+    }
+    for text in [h, &files.source] {
+        assert!(!text.contains("throw "), "a throw is left");
+        assert!(!text.contains("try {"), "a try block is left");
+        assert!(!text.contains("uniffi_throw"));
+    }
+    assert!(!h.contains("#error"));
+    compiles_with(&files, &["-fno-exceptions"]);
+    // The same bindings also build where exceptions are on.
+    compiles(&files);
+}
+
+#[test]
+fn throwing_bindings_refuse_to_build_without_exceptions() {
+    let files = generate();
+    assert!(files.header.contains("#if !UNIFFI_CPP_EXCEPTIONS"));
+    let Some(out) = compile(&files, &["-fno-exceptions"]) else {
+        return;
+    };
+    assert!(!out.status.success());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("exceptions = false"), "{stderr}");
 }
 
 #[test]

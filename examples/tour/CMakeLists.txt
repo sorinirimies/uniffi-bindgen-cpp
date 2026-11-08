@@ -22,3 +22,12 @@ endif()
 
 enable_testing()
 add_test(NAME tour COMMAND test_tour)
+
+# The same crate's bindings for code built with -fno-exceptions.
+if(NOT MSVC)
+    uniffi_cpp_bindings(tour_noexcept RUST tour_rust COMPONENTS tour NO_EXCEPTIONS)
+    add_executable(test_tour_noexcept ${REPO}/fixtures/tour/cpp/test_tour_noexcept.cpp)
+    target_compile_options(test_tour_noexcept PRIVATE -fno-exceptions)
+    target_link_libraries(test_tour_noexcept PRIVATE tour_noexcept)
+    add_test(NAME tour_noexcept COMMAND test_tour_noexcept)
+endif()

@@ -7,7 +7,7 @@ use runner.nu *
 use ../ci/deps_update.nu [present commit_message series lock_versions downgrades pins pins_changed next_patch upgrade_message]
 use ../ci/publish_crate.nu [already_published package_args]
 use ../ci/apt.nu [commands]
-use ../ci/clang_tidy.nu [tidy_args]
+use ../ci/clang_tidy.nu [tidy_args MODES]
 use ../ci/install_clang_tidy.nu [wheel_tag wheel_url]
 use ../ci/check_static.nu [is_static]
 use ../ci/prune_releases.nu [from_gh from_gitea doomed newest]
@@ -239,6 +239,11 @@ def "test clang_tidy: C++17, the bindings, and the SDK on macOS only" [] {
     assert equal (tidy_args "/o" "linux" "/sdk") ["--" "-std=c++17" "-I/o"]
 }
 
+def "test clang_tidy: both kinds of bindings, the second built with -fno-exceptions" [] {
+    assert equal ($MODES | get generate) [[] ["--no-exceptions"]]
+    assert equal ($MODES | get cxx) [[] ["-fno-exceptions"]]
+}
+
 def "test install_clang_tidy: one wheel per runner platform" [] {
     assert equal (wheel_tag "linux" "x86_64") "manylinux_2_27_x86_64"
     assert equal (wheel_tag "macos" "aarch64") "macosx_11_0_arm64"
@@ -258,8 +263,8 @@ def "test install_clang_tidy: the wheel is picked by tag, never the sdist" [] {
 def main [] { run-tests }
 
 use ../ci/cxx.nu
-use ../ci/cpp_e2e.nu [compile_args]
-use ../ci/fixtures.nu [cdylibs selected SKIP]
+use ../ci/cpp_e2e.nu [compile_args test_file]
+use ../ci/fixtures.nu [cdylibs selected SKIP mode_args]
 
 def "test cxx: library file name per platform" [] {
     assert equal (cxx library_file "tour" "macos") "libtour.dylib"
@@ -290,6 +295,20 @@ def "test cpp_e2e: compile arguments" [] {
     let args = (compile_args "/o" "/l" "/o/t" false)
     assert ("/o/tour.cpp" in $args)
     assert ("-ltour" in $args)
+}
+
+def "test cpp_e2e: without exceptions the noexcept test builds with -fno-exceptions" [] {
+    let args = (compile_args "/o" "/l" "/o/t" false false)
+    assert ("-fno-exceptions" in $args)
+    assert ("/o/test_tour_noexcept.cpp" in $args)
+    assert ("/o/test_tour.cpp" not-in $args)
+    assert ("-fno-exceptions" not-in (compile_args "/o" "/l" "/o/t" false))
+    assert equal (test_file true) "test_tour.cpp"
+}
+
+def "test fixtures: without exceptions they generate with --no-exceptions and build with -fno-exceptions" [] {
+    assert equal (mode_args false) {generate: ["--no-exceptions"], cxx: ["-fno-exceptions"]}
+    assert equal (mode_args true) {generate: [], cxx: []}
 }
 
 def "test fixtures: cdylibs come from cargo metadata" [] {

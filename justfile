@@ -53,11 +53,11 @@ test:
 tidy:
     nu scripts/ci/clang_tidy.nu
 
-# Generate C++ for the tour fixture, compile it and run the C++ test (add --sanitize for ASan/UBSan)
+# Generate C++ for the tour fixture, compile it and run the C++ test (add --sanitize for ASan/UBSan, --no-exceptions for -fno-exceptions)
 e2e *args:
     nu scripts/ci/cpp_e2e.nu {{ args }}
 
-# uniffi's fixture suite: generate, compile with -Werror, run (args: --sanitize, --only <lib>)
+# uniffi's fixture suite: generate, compile with -Werror, run (args: --sanitize, --no-exceptions, --only <lib>)
 fixtures *args:
     nu scripts/ci/fixtures.nu {{ args }}
 

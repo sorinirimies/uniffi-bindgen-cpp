@@ -8,6 +8,10 @@ expression: generate().header
 
 #include "uniffi_runtime.hpp"
 
+#if !UNIFFI_CPP_EXCEPTIONS
+#error "these bindings throw: generate them with `exceptions = false` to build without exceptions"
+#endif
+
 namespace sample {
 
 class Detailed;
@@ -314,7 +318,7 @@ inline ::sample::Color Codec<::sample::Color>::read(Reader& reader) {
     switch (reader.read_int<int32_t>()) {
         case 1: return ::sample::Color::Red;
         case 2: return ::sample::Color::Green;
-        default: throw InternalError("unexpected enum case");
+        default: detail::fail<InternalError>("unexpected enum case");
     }
 }
 
@@ -327,7 +331,7 @@ inline void Codec<::sample::Color>::write(Writer& writer, ::sample::Color value)
         case ::sample::Color::Green: writer.write_int<int32_t>(2);
             return;
     }
-    throw InternalError("unexpected enum value");
+    detail::fail<InternalError>("unexpected enum value");
 }
 
 inline std::shared_ptr<::sample::Detailed> Codec<std::shared_ptr<::sample::Detailed>>::read(Reader& reader) {
@@ -339,13 +343,13 @@ inline std::shared_ptr<::sample::Detailed> Codec<std::shared_ptr<::sample::Detai
         case 2: {
             return std::make_shared<::sample::Detailed_Empty>();
         }
-        default: throw InternalError("unexpected error variant");
+        default: detail::fail<InternalError>("unexpected error variant");
     }
 }
 
 inline void Codec<std::shared_ptr<::sample::Detailed>>::write(Writer& writer, const std::shared_ptr<::sample::Detailed>& value) {
     if (!value) {
-        throw InternalError("a null error cannot be passed to Rust");
+        detail::fail<InternalError>("a null error cannot be passed to Rust");
     }
     write_value(writer, *value);
 }
@@ -354,13 +358,13 @@ inline std::shared_ptr<::sample::Oops> Codec<std::shared_ptr<::sample::Oops>>::r
     switch (reader.read_int<int32_t>()) {
         case 1: return std::make_shared<::sample::Oops_Bad>(Codec<std::string>::read(reader));
         case 2: return std::make_shared<::sample::Oops_Worse>(Codec<std::string>::read(reader));
-        default: throw InternalError("unexpected error variant");
+        default: detail::fail<InternalError>("unexpected error variant");
     }
 }
 
 inline void Codec<std::shared_ptr<::sample::Oops>>::write(Writer& writer, const std::shared_ptr<::sample::Oops>& value) {
     if (!value) {
-        throw InternalError("a null error cannot be passed to Rust");
+        detail::fail<InternalError>("a null error cannot be passed to Rust");
     }
     write_value(writer, *value);
 }
@@ -392,7 +396,7 @@ inline ::sample::Shape Codec<::sample::Shape>::read(Reader& reader) {
         case 2: {
             return ::sample::Shape(::sample::Shape::Empty{});
         }
-        default: throw InternalError("unexpected enum case");
+        default: detail::fail<InternalError>("unexpected enum case");
     }
 }
 
@@ -416,7 +420,7 @@ inline void Codec<::sample::Shape>::write(Writer& writer, const ::sample::Shape&
         }
         default: break;
     }
-    throw InternalError("unexpected enum value");
+    detail::fail<InternalError>("unexpected enum value");
 }
 
 inline ::sample::Holder Codec<::sample::Holder>::read(Reader& reader) {

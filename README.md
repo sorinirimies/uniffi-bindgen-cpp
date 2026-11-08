@@ -21,6 +21,8 @@ through its C ABI, so you link the Rust library like any other native library.
 * **Plain C++ types:** structs, `enum class`, `std::variant`, `std::optional`,
   `std::vector`, `std::map`, `std::set`, `std::shared_ptr`, exceptions; `==`, `<`, `std::hash`
   and `operator<<` where Rust exports them.
+* **With or without exceptions:** errors are thrown by default, or returned in a
+  `uniffi::Result` for code built with `-fno-exceptions`.
 * **Builds with CMake:** one call builds the crate with cargo, another generates and
   compiles its bindings.
 
@@ -155,6 +157,43 @@ Rust panics throw `uniffi::PanicError`; everything the bindings throw derives fr
 too: catch it by its class. A C++ callback may throw the error type its method declares;
 any other exception reaches Rust as an unexpected error.
 
+### Without exceptions
+
+For code built with `-fno-exceptions`, generate with `exceptions = false` (or
+`--no-exceptions`). Nothing in the bindings throws then:
+
+* A call whose Rust function returns `Result<T, E>` returns
+  `uniffi::Result<T, std::shared_ptr<E>>`; async ones a `uniffi::Future` of it. Calls
+  without a Rust error keep their plain types.
+* A C++ implementation of such a callback method returns the `uniffi::Result` too.
+* What can only be a bug (a Rust panic, a corrupt buffer, a stale handle) goes to the
+  fatal handler, which prints the message and aborts. Built with exceptions on, the same
+  bindings throw these instead.
+
+```cpp
+auto counter = mycrate::Counter::checked(start);    // Result<shared_ptr<Counter>, shared_ptr<FlatError>>
+if (!counter) {
+    auto& error = counter.error();                  // the error class, as without this mode
+    switch (error->uniffi_variant_index()) { /* ... */ }  // or std::dynamic_pointer_cast
+}
+int64_t left = counter.value()->try_sub(1).value_or(0);
+
+uniffi::Result<std::string, std::shared_ptr<mycrate::FlatError>> fallible(int32_t n) override {
+    if (n < 0) return uniffi::Err{std::make_shared<mycrate::FlatError_Denied>("negative")};
+    return uniffi::Ok{std::to_string(n)};           // uniffi::Ok{} for void
+}
+
+auto sum = mycrate::slow_add(1, 2);
+sum.cancel();
+if (sum.is_cancelled()) { /* get() would be a failure here */ }
+
+uniffi::set_fatal_handler([](const char* message) { log_and_exit(message); });   // must not return
+```
+
+`value()` on an error, `error()` on a value and `get()` on a cancelled future are bugs as
+well. `uniffi::Future<T>::from(std::future)` and `failed(error)` need exceptions; complete a
+`uniffi::Promise` instead. Bindings generated with exceptions refuse to build without them.
+
 ### Async
 
 `uniffi::Future<T>` is what an `async fn` returns:
@@ -163,7 +202,7 @@ any other exception reaches Rust as an unexpected error.
 auto future = mqtt::connect(options);
 future.get();                                   // wait, like std::future
 future.wait_for(std::chrono::seconds(1));
-future.cancel();                                // drops the Rust future; get() throws uniffi::CancelledError
+future.cancel();                                // drops the Rust future; is_cancelled(), and get() throws uniffi::CancelledError
 mqtt::fetch(id).then([](uniffi::Future<Item> done) { use(done.get()); });   // no blocking
 auto item = co_await mqtt::fetch(id);           // C++20
 ```
@@ -198,6 +237,7 @@ with `--config`:
 [bindings.cpp]
 namespace = "mqtt"          # default: the UniFFI namespace
 omit_checksums = false
+exceptions = true           # false: build with -fno-exceptions (see "Without exceptions")
 
 [bindings.cpp.custom_types.Timestamp]
 type_name = "std::chrono::system_clock::time_point"
@@ -227,8 +267,8 @@ Record = "CppRecord"
 ```sh
 just              # list tasks
 just check-all    # the quality gate: fmt, clippy, tests, versions, nu tests
-just e2e          # generate C++ for the tour fixture, compile and run it
-just fixtures     # the same for uniffi's fixture suite (add --sanitize, or --only <lib>)
+just e2e          # generate C++ for the tour fixture, compile and run it (add --no-exceptions)
+just fixtures     # the same for uniffi's fixture suite (add --sanitize, --no-exceptions, or --only <lib>)
 just cmake        # build and test the CMake examples
 just tidy         # clang-tidy on the generated C++ (.clang-tidy; findings fail CI)
 just fuzz-all     # every cargo-fuzz target (nightly)

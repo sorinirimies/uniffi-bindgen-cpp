@@ -33,15 +33,22 @@ export def selected [libs: list, only: string] {
     $libs | where { |l| $l.name not-in $SKIP and ($only == "" or $l.name == $only) }
 }
 
-def run_library [lib: record, bin: string, lib_dir: string, out_root: string, compiler: string, sanitize: bool] {
+# Generator arguments and extra compiler flags for a mode: without exceptions the
+# bindings are generated with --no-exceptions and must build with -fno-exceptions.
+export def mode_args [exceptions: bool] {
+    if $exceptions { {generate: [], cxx: []} } else { {generate: ["--no-exceptions"], cxx: ["-fno-exceptions"]} }
+}
+
+def run_library [lib: record, bin: string, lib_dir: string, out_root: string, compiler: string, sanitize: bool, exceptions: bool] {
+    let mode = (mode_args $exceptions)
     let out = ($out_root | path join $lib.name)
     mkdir $out
     let library = ($lib_dir | path join (cxx library_file $lib.name $nu.os-info.name))
     # Library mode finds UDL files through `cargo metadata`, so run inside the fixture workspace.
-    let gen = (do { cd $lib.dir; ^$bin generate $library --out-dir $out --no-format } | complete)
+    let gen = (do { cd $lib.dir; ^$bin generate $library --out-dir $out --no-format ...$mode.generate } | complete)
     if $gen.exit_code != 0 { return [{library: $lib.name, step: "generate", detail: $gen.stderr}] }
 
-    let flags = (cxx flags $sanitize)
+    let flags = (cxx flags $sanitize) ++ $mode.cxx
     let sources = (glob $"($out)/*.cpp")
     mut objects = []
     mut failures = []
@@ -54,6 +61,8 @@ def run_library [lib: record, bin: string, lib_dir: string, out_root: string, co
         $objects = ($objects | append $object)
     }
     if ($failures | is-not-empty) { return $failures }
+    # The fixtures' tests catch exceptions: without them, building the bindings is the test.
+    if not $exceptions { return [] }
     let objects = $objects
 
     let check_dir = ($env.FILE_PWD | path dirname | path dirname | path join $FIXTURES cpp)
@@ -82,7 +91,7 @@ def run_library [lib: record, bin: string, lib_dir: string, out_root: string, co
     $failures
 }
 
-def main [--sanitize, --only: string = ""] {
+def main [--sanitize, --no-exceptions, --only: string = ""] {
     let root = ($env.FILE_PWD | path dirname | path dirname)
     cd $root
     let manifest = ($FIXTURES | path join Cargo.toml)
@@ -95,8 +104,9 @@ def main [--sanitize, --only: string = ""] {
     let compiler = (cxx compiler ($env.CXX? | default "") (cxx available))
     let out_root = (mktemp --directory)
 
-    print -e $"▶ generating, compiling and testing ($libs | length) libraries with ($compiler)"
-    let failures = ($libs | each { |lib| run_library $lib $bin $lib_dir $out_root $compiler $sanitize } | flatten)
+    let what = if $no_exceptions { "compiling with -fno-exceptions" } else { "compiling and testing" }
+    print -e $"▶ generating, ($what) ($libs | length) libraries with ($compiler)"
+    let failures = ($libs | each { |lib| run_library $lib $bin $lib_dir $out_root $compiler $sanitize (not $no_exceptions) } | flatten)
     if ($failures | is-not-empty) {
         for f in $failures {
             print -e $"✗ ($f.library): ($f.step)\n($f.detail | lines | first 30 | str join "\n")"

@@ -192,7 +192,7 @@ struct BufferGuard {
     uniffi::RustCallStatus status{};
     uniffi::RustBuffer buffer = ffi::ffi_sample_rustbuffer_from_bytes(bytes, &status);
     if (status.code != uniffi::CALL_SUCCESS) {
-        throw uniffi::InternalError("could not allocate a Rust buffer");
+        uniffi::detail::fail<uniffi::InternalError>("could not allocate a Rust buffer");
     }
     return buffer;
 }
@@ -210,7 +210,7 @@ using Thrower = void (*)(uniffi::RustBuffer);
             {
                 BufferGuard guard{status.error_buf};
             }
-            throw uniffi::InternalError("the call failed with an error the bindings do not expect");
+            uniffi::detail::fail<uniffi::InternalError>("the call failed with an error the bindings do not expect");
         case uniffi::CALL_UNEXPECTED_ERROR: {
             std::string message = "Rust panic";
             BufferGuard guard{status.error_buf};
@@ -218,12 +218,12 @@ using Thrower = void (*)(uniffi::RustBuffer);
                 message.assign(reinterpret_cast<const char*>(status.error_buf.data),
                                static_cast<size_t>(status.error_buf.len));
             }
-            throw uniffi::PanicError(message);
+            uniffi::detail::fail<uniffi::PanicError>(message);
         }
         case uniffi::CALL_CANCELLED:
-            throw uniffi::CancelledError();
+            uniffi::detail::fail<uniffi::CancelledError>();
         default:
-            throw uniffi::InternalError("unexpected RustCallStatus code");
+            uniffi::detail::fail<uniffi::InternalError>("unexpected RustCallStatus code");
     }
 }
 
@@ -240,7 +240,7 @@ T lift_buf(uniffi::RustBuffer buffer) {
     uniffi::Reader reader(buffer.data, static_cast<size_t>(buffer.len));
     T value = uniffi::Codec<T>::read(reader);
     if (reader.has_remaining()) {
-        throw uniffi::InternalError("the buffer still has data after lifting its containing value");
+        uniffi::detail::fail<uniffi::InternalError>("the buffer still has data after lifting its containing value");
     }
     return value;
 }
@@ -275,13 +275,9 @@ namespace {
     if (handle == 0) {
         return;
     }
-    std::function<void()> cancel;
-    try {
-        cancel = foreign_futures().remove(handle);
-    } catch (const std::exception&) {
-        return;
+    if (auto cancel = foreign_futures().try_remove(handle)) {
+        (*cancel)();
     }
-    cancel();
 }
 
 uniffi::HandleMap<std::shared_ptr<Sink>>& handle_map_Sink() {
@@ -290,10 +286,7 @@ uniffi::HandleMap<std::shared_ptr<Sink>>& handle_map_Sink() {
 }
 
 void cb_Sink_free(uint64_t handle) {
-    try {
-        handle_map_Sink().remove(handle);
-    } catch (...) {
-    }
+    (void)handle_map_Sink().try_remove(handle);
 }
 
 uint64_t cb_Sink_clone(uint64_t handle) {
@@ -347,49 +340,49 @@ namespace uniffi_detail {
 void ensure_init() {
     static const bool initialized = [] {
         if (ffi::ffi_sample_uniffi_contract_version() != 30) {
-            throw uniffi::InternalError("UniFFI contract version mismatch: try cleaning and rebuilding your project");
+            uniffi::detail::fail<uniffi::InternalError>("UniFFI contract version mismatch: try cleaning and rebuilding your project");
         }
         if (ffi::uniffi_sample_checksum_func_add() != 11862) {
-            throw uniffi::InternalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project");
+            uniffi::detail::fail<uniffi::InternalError>("UniFFI API checksum mismatch: try cleaning and rebuilding your project");
         }
         if (ffi::uniffi_sample_checksum_func_counts() != 60382) {
-            throw uniffi::InternalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project");
+            uniffi::detail::fail<uniffi::InternalError>("UniFFI API checksum mismatch: try cleaning and rebuilding your project");
         }
         if (ffi::uniffi_sample_checksum_func_fetch() != 14633) {
-            throw uniffi::InternalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project");
+            uniffi::detail::fail<uniffi::InternalError>("UniFFI API checksum mismatch: try cleaning and rebuilding your project");
         }
         if (ffi::uniffi_sample_checksum_func_names() != 53557) {
-            throw uniffi::InternalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project");
+            uniffi::detail::fail<uniffi::InternalError>("UniFFI API checksum mismatch: try cleaning and rebuilding your project");
         }
         if (ffi::uniffi_sample_checksum_func_reverse() != 65335) {
-            throw uniffi::InternalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project");
+            uniffi::detail::fail<uniffi::InternalError>("UniFFI API checksum mismatch: try cleaning and rebuilding your project");
         }
         if (ffi::uniffi_sample_checksum_func_risky() != 864) {
-            throw uniffi::InternalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project");
+            uniffi::detail::fail<uniffi::InternalError>("UniFFI API checksum mismatch: try cleaning and rebuilding your project");
         }
         if (ffi::uniffi_sample_checksum_func_shape_of() != 16923) {
-            throw uniffi::InternalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project");
+            uniffi::detail::fail<uniffi::InternalError>("UniFFI API checksum mismatch: try cleaning and rebuilding your project");
         }
         if (ffi::uniffi_sample_checksum_method_thing_check() != 48297) {
-            throw uniffi::InternalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project");
+            uniffi::detail::fail<uniffi::InternalError>("UniFFI API checksum mismatch: try cleaning and rebuilding your project");
         }
         if (ffi::uniffi_sample_checksum_method_thing_later() != 11508) {
-            throw uniffi::InternalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project");
+            uniffi::detail::fail<uniffi::InternalError>("UniFFI API checksum mismatch: try cleaning and rebuilding your project");
         }
         if (ffi::uniffi_sample_checksum_method_thing_name() != 20614) {
-            throw uniffi::InternalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project");
+            uniffi::detail::fail<uniffi::InternalError>("UniFFI API checksum mismatch: try cleaning and rebuilding your project");
         }
         if (ffi::uniffi_sample_checksum_constructor_thing_new() != 10643) {
-            throw uniffi::InternalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project");
+            uniffi::detail::fail<uniffi::InternalError>("UniFFI API checksum mismatch: try cleaning and rebuilding your project");
         }
         if (ffi::uniffi_sample_checksum_constructor_thing_other() != 57531) {
-            throw uniffi::InternalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project");
+            uniffi::detail::fail<uniffi::InternalError>("UniFFI API checksum mismatch: try cleaning and rebuilding your project");
         }
         if (ffi::uniffi_sample_checksum_method_sink_push() != 59920) {
-            throw uniffi::InternalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project");
+            uniffi::detail::fail<uniffi::InternalError>("UniFFI API checksum mismatch: try cleaning and rebuilding your project");
         }
         if (ffi::uniffi_sample_checksum_method_sink_count() != 31664) {
-            throw uniffi::InternalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project");
+            uniffi::detail::fail<uniffi::InternalError>("UniFFI API checksum mismatch: try cleaning and rebuilding your project");
         }
         init_Sink();
         return true;
@@ -476,9 +469,12 @@ uniffi::Future<uint32_t> Thing::later() const {
     uint64_t uniffi_future = ffi::uniffi_sample_fn_method_thing_later(uniffi_clone_handle());
     return uniffi::detail::start_future<uint32_t>(
         uniffi_future, &ffi::ffi_sample_rust_future_poll_u32, &ffi::ffi_sample_rust_future_cancel_u32, &ffi::ffi_sample_rust_future_free_u32,
-        [](uint64_t uniffi_handle) -> uint32_t {
+        [](uint64_t uniffi_handle) -> std::optional<uint32_t> {
             uniffi::RustCallStatus uniffi_status{};
             auto uniffi_result = ffi::ffi_sample_rust_future_complete_u32(uniffi_handle, &uniffi_status);
+            if (uniffi_status.code == uniffi::CALL_CANCELLED) {
+                return std::nullopt;
+            }
             uniffi_detail::check_status(uniffi_status);
             return uniffi_result;
         });
@@ -513,9 +509,12 @@ uniffi::Future<std::string> fetch(std::string_view key) {
     uint64_t uniffi_future = ffi::uniffi_sample_fn_func_fetch(uniffi_detail::lower_string(key));
     return uniffi::detail::start_future<std::string>(
         uniffi_future, &ffi::ffi_sample_rust_future_poll_rust_buffer, &ffi::ffi_sample_rust_future_cancel_rust_buffer, &ffi::ffi_sample_rust_future_free_rust_buffer,
-        [](uint64_t uniffi_handle) -> std::string {
+        [](uint64_t uniffi_handle) -> std::optional<std::string> {
             uniffi::RustCallStatus uniffi_status{};
             auto uniffi_result = ffi::ffi_sample_rust_future_complete_rust_buffer(uniffi_handle, &uniffi_status);
+            if (uniffi_status.code == uniffi::CALL_CANCELLED) {
+                return std::nullopt;
+            }
             uniffi_detail::check_status(uniffi_status);
             return uniffi_detail::lift_string(uniffi_result);
         });

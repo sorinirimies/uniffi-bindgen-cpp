@@ -26,6 +26,9 @@
 #                                 crate, else CMAKE_CURRENT_SOURCE_DIR
 #       [CONFIG <uniffi.toml>]
 #       [BINDGEN <program>]       default: uniffi-bindgen-cpp on the PATH
+#       [NO_EXCEPTIONS]           generate with --no-exceptions (Rust errors come back in a
+#                                 uniffi::Result) and build the bindings with -fno-exceptions
+#                                 (GCC and Clang)
 #   )
 #
 #     Generates the bindings at build time and compiles them into the static library
@@ -104,7 +107,7 @@ function(uniffi_cargo_library target)
 endfunction()
 
 function(uniffi_cpp_bindings target)
-    cmake_parse_arguments(PARSE_ARGV 1 ARG "" "RUST;LIBRARY;OUT_DIR;CRATE_DIR;CONFIG;BINDGEN" "COMPONENTS;LINK;DEPENDS")
+    cmake_parse_arguments(PARSE_ARGV 1 ARG "NO_EXCEPTIONS" "RUST;LIBRARY;OUT_DIR;CRATE_DIR;CONFIG;BINDGEN" "COMPONENTS;LINK;DEPENDS")
     if(ARG_RUST)
         get_target_property(ARG_LIBRARY ${ARG_RUST} UNIFFI_LIBRARY)
         if(NOT ARG_LINK)
@@ -142,6 +145,9 @@ function(uniffi_cpp_bindings target)
     if(ARG_CONFIG)
         set(config_args --config "${ARG_CONFIG}")
     endif()
+    if(ARG_NO_EXCEPTIONS)
+        list(APPEND config_args --no-exceptions)
+    endif()
 
     add_custom_command(
         OUTPUT ${sources} ${headers}
@@ -154,6 +160,9 @@ function(uniffi_cpp_bindings target)
     add_library(${target} STATIC ${sources} ${headers})
     target_include_directories(${target} PUBLIC "${ARG_OUT_DIR}")
     target_compile_features(${target} PUBLIC cxx_std_17)
+    if(ARG_NO_EXCEPTIONS)
+        target_compile_options(${target} PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-fno-exceptions>)
+    endif()
     find_package(Threads REQUIRED)
     target_link_libraries(${target} PUBLIC ${ARG_LINK} Threads::Threads)
     if(ARG_DEPENDS)

@@ -70,27 +70,37 @@ impl Gen<'_> {
         for e in self.ci.enum_definitions() {
             if self.is_error_enum(e.name()) {
                 let name = class(e.name());
-                let _ = writeln!(
-                    out,
-                    "{}",
-                    fill(
-                        "[[noreturn]] void throw_buf_@name@(uniffi::RustBuffer buffer) {\n    BufferGuard guard{buffer};\n    uniffi::Reader reader(buffer.data, static_cast<size_t>(buffer.len));\n    uniffi::Codec<std::shared_ptr<::@ns@::@name@>>::read(reader)->uniffi_throw();\n    std::abort();  // not reached; GCC does not take [[noreturn]] from a virtual call\n}\n",
-                        &[("name", &name), ("ns", ns)],
-                    )
-                );
+                let template = if self.exceptions() {
+                    "[[noreturn]] void throw_buf_@name@(uniffi::RustBuffer buffer) {\n    BufferGuard guard{buffer};\n    uniffi::Reader reader(buffer.data, static_cast<size_t>(buffer.len));\n    uniffi::Codec<std::shared_ptr<::@ns@::@name@>>::read(reader)->uniffi_throw();\n    std::abort();  // not reached; GCC does not take [[noreturn]] from a virtual call\n}\n"
+                } else {
+                    "std::shared_ptr<::@ns@::@name@> lift_error_@name@(uniffi::RustBuffer buffer) {\n    BufferGuard guard{buffer};\n    uniffi::Reader reader(buffer.data, static_cast<size_t>(buffer.len));\n    return uniffi::Codec<std::shared_ptr<::@ns@::@name@>>::read(reader);\n}\n"
+                };
+                let _ = writeln!(out, "{}", fill(template, &[("name", &name), ("ns", ns)]));
             }
         }
         for obj in self.ci.object_definitions() {
             if self.is_error_object(obj.name()) {
                 let name = class(obj.name());
-                let thrown = if obj.is_trait_interface() || obj.has_callback_interface() {
-                    format!("{name}RustImpl(handle)")
+                let (class_name, args) = if obj.is_trait_interface() || obj.has_callback_interface()
+                {
+                    (format!("{name}RustImpl"), "handle")
                 } else {
-                    format!("::{ns}::{name}(uniffi::HandleTag{{}}, handle)")
+                    (format!("::{ns}::{name}"), "uniffi::HandleTag{}, handle")
+                };
+                let (head, raise) = if self.exceptions() {
+                    (
+                        format!("[[noreturn]] void throw_buf_{name}"),
+                        format!("throw {class_name}({args});"),
+                    )
+                } else {
+                    (
+                        format!("std::shared_ptr<::{ns}::{name}> lift_error_{name}"),
+                        format!("return std::make_shared<{class_name}>({args});"),
+                    )
                 };
                 let _ = writeln!(
                     out,
-                    "[[noreturn]] void throw_buf_{name}(uniffi::RustBuffer buffer) {{\n    BufferGuard guard{{buffer}};\n    uniffi::Reader reader(buffer.data, static_cast<size_t>(buffer.len));\n    uint64_t handle = reader.read_int<uint64_t>();\n    throw {thrown};\n}}\n"
+                    "{head}(uniffi::RustBuffer buffer) {{\n    BufferGuard guard{{buffer}};\n    uniffi::Reader reader(buffer.data, static_cast<size_t>(buffer.len));\n    uint64_t handle = reader.read_int<uint64_t>();\n    {raise}\n}}\n"
                 );
             }
         }
@@ -139,7 +149,7 @@ struct BufferGuard {
     uniffi::RustCallStatus status{};
     uniffi::RustBuffer buffer = ffi::@from_bytes@(bytes, &status);
     if (status.code != uniffi::CALL_SUCCESS) {
-        throw uniffi::InternalError("could not allocate a Rust buffer");
+        uniffi::detail::fail<uniffi::InternalError>("could not allocate a Rust buffer");
     }
     return buffer;
 }
@@ -157,7 +167,7 @@ using Thrower = void (*)(uniffi::RustBuffer);
             {
                 BufferGuard guard{status.error_buf};
             }
-            throw uniffi::InternalError("the call failed with an error the bindings do not expect");
+            uniffi::detail::fail<uniffi::InternalError>("the call failed with an error the bindings do not expect");
         case uniffi::CALL_UNEXPECTED_ERROR: {
             std::string message = "Rust panic";
             BufferGuard guard{status.error_buf};
@@ -165,12 +175,12 @@ using Thrower = void (*)(uniffi::RustBuffer);
                 message.assign(reinterpret_cast<const char*>(status.error_buf.data),
                                static_cast<size_t>(status.error_buf.len));
             }
-            throw uniffi::PanicError(message);
+            uniffi::detail::fail<uniffi::PanicError>(message);
         }
         case uniffi::CALL_CANCELLED:
-            throw uniffi::CancelledError();
+            uniffi::detail::fail<uniffi::CancelledError>();
         default:
-            throw uniffi::InternalError("unexpected RustCallStatus code");
+            uniffi::detail::fail<uniffi::InternalError>("unexpected RustCallStatus code");
     }
 }
 
@@ -187,7 +197,7 @@ T lift_buf(uniffi::RustBuffer buffer) {
     uniffi::Reader reader(buffer.data, static_cast<size_t>(buffer.len));
     T value = uniffi::Codec<T>::read(reader);
     if (reader.has_remaining()) {
-        throw uniffi::InternalError("the buffer still has data after lifting its containing value");
+        uniffi::detail::fail<uniffi::InternalError>("the buffer still has data after lifting its containing value");
     }
     return value;
 }
@@ -223,7 +233,7 @@ uniffi::RustBuffer lower_error(const E& error) {
             for (name, expected) in self.ci.iter_checksums() {
                 let _ = writeln!(
                     checks,
-                    "        if (ffi::{name}() != {expected}) {{\n            throw uniffi::InternalError(\"UniFFI API checksum mismatch: try cleaning and rebuilding your project\");\n        }}"
+                    "        if (ffi::{name}() != {expected}) {{\n            uniffi::detail::fail<uniffi::InternalError>(\"UniFFI API checksum mismatch: try cleaning and rebuilding your project\");\n        }}"
                 );
             }
         }
@@ -243,7 +253,7 @@ uniffi::RustBuffer lower_error(const E& error) {
             }
         }
         format!(
-            "namespace uniffi_detail {{\n\nvoid ensure_init() {{\n    static const bool initialized = [] {{\n        if (ffi::{contract}() != {version}) {{\n            throw uniffi::InternalError(\"UniFFI contract version mismatch: try cleaning and rebuilding your project\");\n        }}\n{checks}{inits}        return true;\n    }}();\n    (void)initialized;\n}}\n\n}}  // namespace uniffi_detail\n\n",
+            "namespace uniffi_detail {{\n\nvoid ensure_init() {{\n    static const bool initialized = [] {{\n        if (ffi::{contract}() != {version}) {{\n            uniffi::detail::fail<uniffi::InternalError>(\"UniFFI contract version mismatch: try cleaning and rebuilding your project\");\n        }}\n{checks}{inits}        return true;\n    }}();\n    (void)initialized;\n}}\n\n}}  // namespace uniffi_detail\n\n",
             contract = contract.name(),
             version = self.ci.uniffi_contract_version(),
         )

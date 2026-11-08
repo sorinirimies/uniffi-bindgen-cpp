@@ -524,7 +524,7 @@ impl Gen<'_> {
 /// `what()` of an exception class: its `Display` text, computed on first use.
 pub(crate) fn what_from_display(name: &str) -> String {
     format!(
-        "const char* {name}::what() const noexcept {{\n    if (what_.empty()) {{\n        try {{\n            what_ = to_string();\n        }} catch (...) {{\n            what_ = \"{name}\";\n        }}\n    }}\n    return what_.c_str();\n}}\n\n"
+        "const char* {name}::what() const noexcept {{\n    if (what_.empty()) {{\n#if UNIFFI_CPP_EXCEPTIONS\n        try {{\n            what_ = to_string();\n        }} catch (...) {{\n            what_ = \"{name}\";\n        }}\n#else\n        what_ = to_string();\n#endif\n    }}\n    return what_.c_str();\n}}\n\n"
     )
 }
 

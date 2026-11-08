@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use serde::Deserialize;
 
 /// Options that customize the generated C++.
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct Config {
     /// C++ namespace of the generated code. Defaults to the UniFFI namespace.
@@ -15,11 +15,27 @@ pub struct Config {
     pub cdylib_name: Option<String>,
     /// Skip the API checksum comparison at start-up.
     pub omit_checksums: bool,
+    /// `false` generates bindings that compile with `-fno-exceptions`: errors declared
+    /// in Rust come back in a `uniffi::Result` instead of being thrown.
+    pub exceptions: bool,
     /// How custom types map to C++ types.
     pub custom_types: BTreeMap<String, CustomTypeConfig>,
     /// Renames items for C++ only, in UniFFI's dot notation: `Record = "NewName"`,
     /// `"Record.field" = "new_field"`, `"Object.method.arg" = "new_arg"`.
     pub rename: toml::Table,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            namespace: None,
+            cdylib_name: None,
+            omit_checksums: false,
+            exceptions: true,
+            custom_types: BTreeMap::new(),
+            rename: toml::Table::new(),
+        }
+    }
 }
 
 /// Maps a UniFFI custom type to a C++ type.
@@ -83,6 +99,15 @@ mod tests {
         let config = Config::from_root_toml(&root).unwrap();
         assert_eq!(config.namespace, None);
         assert!(!config.omit_checksums);
+        assert!(config.exceptions);
+    }
+
+    #[test]
+    fn exceptions_stay_on_unless_turned_off() {
+        let on: toml::Value = toml::from_str("[bindings.cpp]\nnamespace = 'x'").unwrap();
+        assert!(Config::from_root_toml(&on).unwrap().exceptions);
+        let off: toml::Value = toml::from_str("[bindings.cpp]\nexceptions = false").unwrap();
+        assert!(!Config::from_root_toml(&off).unwrap().exceptions);
     }
 
     #[test]

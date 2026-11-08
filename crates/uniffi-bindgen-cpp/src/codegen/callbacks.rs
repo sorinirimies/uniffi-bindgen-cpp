@@ -76,6 +76,9 @@ impl Gen<'_> {
     ) -> String {
         let args = self.lifted_args(m);
         let method = member(m.name(), name);
+        if !self.exceptions() {
+            return self.sync_wrapper_without_exceptions(name, i, callback, m);
+        }
         let (call, write) = match m.return_type() {
             Some(t) => (
                 format!("auto result = object->{method}({args});"),
@@ -96,6 +99,101 @@ impl Gen<'_> {
         )
     }
 
+    /// The error check of a `uniffi::Result` named `result`: sets `status` and returns.
+    fn result_error_check(&self, m: &Method, result: &str, status: &str, pad: &str) -> String {
+        let lowering = m
+            .throws_type()
+            .and_then(|t| self.error_lowering(t, &format!("{result}.error()")));
+        match (self.result_error(m), lowering) {
+            (Some(_), Some(lowering)) => format!(
+                "{pad}if (!{result}) {{\n{pad}    {status}.code = uniffi::CALL_ERROR;\n{pad}    {status}.error_buf = {lowering};\n{pad}}} else {{\n"
+            ),
+            _ => String::new(),
+        }
+    }
+
+    /// Without exceptions: the implementation returns a `uniffi::Result` when the
+    /// method has a Rust error, and nothing can throw.
+    fn sync_wrapper_without_exceptions(
+        &self,
+        name: &str,
+        i: usize,
+        callback: &FfiCallbackFunction,
+        m: &Method,
+    ) -> String {
+        let args = self.lifted_args(m);
+        let method = member(m.name(), name);
+        let has_result = self.result_error(m).is_some();
+        let check = self.result_error_check(m, "result", "(*uniffi_call_status)", "    ");
+        let (pad, close) = if check.is_empty() {
+            ("    ", String::new())
+        } else {
+            ("        ", "    }\n".to_owned())
+        };
+        let value = if has_result {
+            "result.value()"
+        } else {
+            "result"
+        };
+        let write = match m.return_type() {
+            Some(t) => format!("{pad}*uniffi_out_return = {};\n", self.lower(t, value)),
+            None => String::new(),
+        };
+        let call = if has_result || m.return_type().is_some() {
+            format!("    auto result = object->{method}({args});\n")
+        } else {
+            format!("    object->{method}({args});\n")
+        };
+        let mut unused = String::new();
+        if m.return_type().is_none() {
+            unused.push_str("    (void)uniffi_out_return;\n");
+        }
+        if !has_result && callback.has_rust_call_status_arg() {
+            unused.push_str("    (void)uniffi_call_status;\n");
+        }
+        format!(
+            "void cb_{name}_m{i}({params}) {{\n{unused}    auto object = handle_map_{name}().get(uniffi_handle);\n{call}{check}{write}{close}}}\n\n",
+            params = self.vtable_params(callback, m),
+        )
+    }
+
+    /// Without exceptions: like `async_wrapper`, with the error in a `uniffi::Result`.
+    fn async_wrapper_without_exceptions(
+        &self,
+        name: &str,
+        i: usize,
+        callback: &FfiCallbackFunction,
+        m: &Method,
+    ) -> String {
+        let args = self.lifted_args(m);
+        let method = member(m.name(), name);
+        let result_struct = m.foreign_future_ffi_result_struct().name().to_owned();
+        let ret_cpp = self.result_type_of(m);
+        let has_result = self.result_error(m).is_some();
+        let check = self.result_error_check(m, "value", "result.call_status", "        ");
+        let (pad, close) = if check.is_empty() {
+            ("        ", String::new())
+        } else {
+            ("            ", "        }\n".to_owned())
+        };
+        let get = if ret_cpp == "void" {
+            "        done.get();\n".to_owned()
+        } else {
+            "        auto value = done.get();\n".to_owned()
+        };
+        let store = match m.return_type() {
+            Some(t) => format!(
+                "{pad}result.return_value = {};\n",
+                self.lower(t, if has_result { "value.value()" } else { "value" })
+            ),
+            None => String::new(),
+        };
+        format!(
+            "void cb_{name}_m{i}({params}) {{\n    uniffi_out_dropped_callback->handle = 0;\n    uniffi_out_dropped_callback->free = &foreign_future_dropped;\n    auto object = handle_map_{name}().get(uniffi_handle);\n    uniffi::Future<{ret_cpp}> pending = object->{method}({args});\n    if (!pending.valid()) {{\n        ffi::{result_struct} result{{}};\n        result.call_status.code = uniffi::CALL_UNEXPECTED_ERROR;\n        result.call_status.error_buf = uniffi_detail::lower_string(\"an async callback returned an empty future\");\n        uniffi_future_callback(uniffi_callback_data, result);\n        return;\n    }}\n    // Rust drops the future when it no longer wants the result: cancel the C++ side.\n    auto state = pending.uniffi_state();\n    uniffi_out_dropped_callback->handle = foreign_futures().insert([state] {{ state->request_cancel(); }});\n    pending.then([uniffi_future_callback, uniffi_callback_data](uniffi::Future<{ret_cpp}> done) {{\n        ffi::{result_struct} result{{}};\n{get}{check}{store}{close}        uniffi_future_callback(uniffi_callback_data, result);\n    }});\n}}\n\n",
+            params = self.vtable_params(callback, m),
+        )
+    }
+
     fn async_wrapper(
         &self,
         name: &str,
@@ -105,6 +203,9 @@ impl Gen<'_> {
     ) -> String {
         let args = self.lifted_args(m);
         let method = member(m.name(), name);
+        if !self.exceptions() {
+            return self.async_wrapper_without_exceptions(name, i, callback, m);
+        }
         let result_struct = m.foreign_future_ffi_result_struct().name().to_owned();
         let ret_cpp = m
             .return_type()
@@ -135,9 +236,16 @@ impl Gen<'_> {
         vtable_type: &str,
     ) -> String {
         let mut out = String::new();
+        let clone = if self.exceptions() {
+            format!(
+                "    try {{\n        return handle_map_{name}().clone(handle);\n    }} catch (...) {{\n        return 0;\n    }}\n"
+            )
+        } else {
+            format!("    return handle_map_{name}().clone(handle);\n")
+        };
         let _ = writeln!(
             out,
-            "void cb_{name}_free(uint64_t handle) {{\n    try {{\n        handle_map_{name}().remove(handle);\n    }} catch (...) {{\n    }}\n}}\n\nuint64_t cb_{name}_clone(uint64_t handle) {{\n    try {{\n        return handle_map_{name}().clone(handle);\n    }} catch (...) {{\n        return 0;\n    }}\n}}\n"
+            "void cb_{name}_free(uint64_t handle) {{\n    (void)handle_map_{name}().try_remove(handle);\n}}\n\nuint64_t cb_{name}_clone(uint64_t handle) {{\n{clone}}}\n"
         );
         let mut entries = vec![format!("&cb_{name}_free"), format!("&cb_{name}_clone")];
         for (i, (callback, m)) in methods.iter().enumerate() {
@@ -168,13 +276,9 @@ pub(crate) const FOREIGN_FUTURE_DROPPED: &str = r#"[[maybe_unused]] uniffi::Hand
     if (handle == 0) {
         return;
     }
-    std::function<void()> cancel;
-    try {
-        cancel = foreign_futures().remove(handle);
-    } catch (const std::exception&) {
-        return;
+    if (auto cancel = foreign_futures().try_remove(handle)) {
+        (*cancel)();
     }
-    cancel();
 }
 
 "#;

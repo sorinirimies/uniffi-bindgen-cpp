@@ -76,6 +76,10 @@ jobs:
         run: nu scripts/ci/cpp_e2e.nu
       - name: uniffi fixture suite
         run: nu scripts/ci/fixtures.nu
+      - name: Tour end-to-end test without exceptions (-fno-exceptions)
+        run: nu scripts/ci/cpp_e2e.nu --no-exceptions
+      - name: uniffi fixture suite built with -fno-exceptions
+        run: nu scripts/ci/fixtures.nu --no-exceptions
 
   msrv:
     name: MSRV (1.90)

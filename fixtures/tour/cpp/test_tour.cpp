@@ -249,6 +249,13 @@ static void test_async() {
     CHECK(ok == 50);
 
     CHECK(tour::fetch_via(std::make_shared<CppSource>(), "k").get() == "fetched k");
+
+    // A cancelled Rust future says so, and get() throws CancelledError.
+    auto cancelled = tour::slow_add(1, 2);
+    cancelled.cancel();
+    cancelled.wait();
+    CHECK(cancelled.is_cancelled());
+    CHECK_THROWS(uniffi::CancelledError, (void)cancelled.get());
 }
 
 static void test_custom_types() {

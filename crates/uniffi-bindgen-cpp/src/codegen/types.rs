@@ -39,6 +39,58 @@ impl<'a> Gen<'a> {
         }
     }
 
+    /// Whether errors declared in Rust are thrown (the default) or returned in a
+    /// `uniffi::Result`, for builds without exceptions.
+    pub(crate) fn exceptions(&self) -> bool {
+        self.config.exceptions
+    }
+
+    /// `std::shared_ptr<E>`: how an error of type `t` is held in a `uniffi::Result`.
+    /// A custom type is the error type it wraps.
+    pub(crate) fn error_ptr(&self, t: &Type) -> Option<String> {
+        match t {
+            Type::Enum { name, .. } | Type::Object { name, .. } => {
+                Some(format!("std::shared_ptr<{}>", self.named(t, name)))
+            }
+            Type::Custom { builtin, .. } => self.error_ptr(builtin),
+            _ => None,
+        }
+    }
+
+    /// The error type of the `uniffi::Result` a callable returns without exceptions.
+    pub(crate) fn result_error(&self, c: &dyn Callable) -> Option<String> {
+        if self.exceptions() {
+            return None;
+        }
+        c.throws_type().and_then(|t| self.error_ptr(t))
+    }
+
+    /// The function that reads an error of type `t` from its buffer, without exceptions.
+    pub(crate) fn error_lifter(&self, t: &Type) -> Option<String> {
+        match t {
+            Type::Enum { name, .. } | Type::Object { name, .. } => Some(format!(
+                "{}uniffi_detail::lift_error_{}",
+                self.qualifier(t),
+                class(name)
+            )),
+            Type::Custom { builtin, .. } => self.error_lifter(builtin),
+            _ => None,
+        }
+    }
+
+    /// The expression that lowers the error `expr` (a `std::shared_ptr`) into a buffer.
+    pub(crate) fn error_lowering(&self, t: &Type, expr: &str) -> Option<String> {
+        match t {
+            Type::Enum { .. } => Some(format!("uniffi_detail::lower_error(*{expr})")),
+            Type::Object { .. } => {
+                let ptr = self.error_ptr(t)?;
+                Some(format!("uniffi_detail::lower_buf<{ptr}>({expr})"))
+            }
+            Type::Custom { builtin, .. } => self.error_lowering(builtin, expr),
+            _ => None,
+        }
+    }
+
     /// `::other_ns::` for types defined in another component, empty otherwise.
     pub(crate) fn qualifier(&self, t: &Type) -> String {
         if !self.ci.is_external(t) {

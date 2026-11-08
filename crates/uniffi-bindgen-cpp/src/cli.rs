@@ -45,6 +45,11 @@ enum Command {
         /// Do not include dependencies when running `cargo metadata`.
         #[arg(long)]
         metadata_no_deps: bool,
+
+        /// Generate bindings that build with `-fno-exceptions` (overrides `exceptions`
+        /// in uniffi.toml): Rust errors come back in a `uniffi::Result`.
+        #[arg(long)]
+        no_exceptions: bool,
     },
     /// Write only the runtime header, for projects that generate through another tool.
     Runtime {
@@ -73,21 +78,35 @@ fn execute(cli: Cli) -> Result<()> {
             library,
             no_format,
             metadata_no_deps,
-        } => generate(
-            &source,
-            out_dir,
-            config.as_deref(),
-            crate_name,
-            library.as_deref(),
-            !no_format,
-            metadata_no_deps,
-        ),
+            no_exceptions,
+        } => {
+            let generator = if no_exceptions {
+                CppBindingGenerator::new().with_exceptions(false)
+            } else {
+                CppBindingGenerator::new()
+            };
+            generate(
+                &generator,
+                &source,
+                out_dir,
+                config.as_deref(),
+                crate_name,
+                library.as_deref(),
+                !no_format,
+                metadata_no_deps,
+            )
+        }
         Command::Runtime { out_dir } => write_runtime(&out_dir),
         Command::Cmake { out_dir } => write_cmake_module(&out_dir),
     }
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "one parameter per command line option"
+)]
 fn generate(
+    generator: &CppBindingGenerator,
     source: &camino::Utf8Path,
     out_dir: Option<Utf8PathBuf>,
     config: Option<&camino::Utf8Path>,
@@ -96,12 +115,11 @@ fn generate(
     format: bool,
     metadata_no_deps: bool,
 ) -> Result<()> {
-    let generator = CppBindingGenerator;
     if uniffi_bindgen::is_cdylib(source) {
         let out_dir = out_dir.context("--out-dir is required when generating from a library")?;
         let supplier = CrateConfigSupplier::from_cargo_metadata_command(metadata_no_deps)?;
         uniffi_bindgen::library_mode::generate_bindings(
-            source, crate_name, &generator, &supplier, config, &out_dir, format,
+            source, crate_name, generator, &supplier, config, &out_dir, format,
         )?;
         return Ok(());
     }
@@ -109,7 +127,7 @@ fn generate(
         bail!("`{source}` is neither a library nor a .udl file");
     }
     uniffi_bindgen::generate_external_bindings(
-        &generator,
+        generator,
         source,
         config,
         out_dir.as_deref(),
@@ -140,6 +158,7 @@ mod tests {
             "x",
             "--no-format",
             "--metadata-no-deps",
+            "--no-exceptions",
         ])
         .unwrap();
         let Command::Generate {
@@ -150,6 +169,7 @@ mod tests {
             library,
             no_format,
             metadata_no_deps,
+            no_exceptions,
         } = cli.command
         else {
             panic!("expected generate");
@@ -159,7 +179,7 @@ mod tests {
         assert_eq!(config.as_deref(), Some("u.toml".into()));
         assert_eq!(crate_name.as_deref(), Some("x"));
         assert_eq!(library, None);
-        assert!(no_format && metadata_no_deps);
+        assert!(no_format && metadata_no_deps && no_exceptions);
     }
 
     #[test]

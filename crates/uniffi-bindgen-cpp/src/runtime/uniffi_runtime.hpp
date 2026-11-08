@@ -16,6 +16,7 @@
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <deque>
@@ -98,6 +99,153 @@ public:
 };
 
 // ---------------------------------------------------------------------------
+// Failures without exceptions.
+//
+// Bindings generated with `exceptions = false` return the errors declared in
+// Rust in a `uniffi::Result`. What can only be a bug (a Rust panic, a corrupt
+// buffer, a stale handle) is thrown as above when the build has exceptions, and
+// otherwise goes to the fatal handler, which does not return.
+// ---------------------------------------------------------------------------
+
+#if defined(__cpp_exceptions) || defined(__EXCEPTIONS) || defined(_CPPUNWIND)
+#define UNIFFI_CPP_EXCEPTIONS 1
+#else
+#define UNIFFI_CPP_EXCEPTIONS 0
+#endif
+
+/// Called with the message of a failure that can not be thrown. The default prints
+/// it to stderr; the process aborts when the handler returns.
+using FatalHandler = void (*)(const char* message);
+
+namespace detail {
+
+inline std::atomic<FatalHandler>& fatal_handler_slot() {
+    static std::atomic<FatalHandler> slot{nullptr};
+    return slot;
+}
+
+[[noreturn]] inline void fatal(const char* message) {
+    if (FatalHandler handler = fatal_handler_slot().load()) {
+        handler(message);
+    } else {
+        std::fprintf(stderr, "uniffi: %s\n", message);
+    }
+    std::abort();
+}
+
+/// Throws `E(args...)`, or without exceptions passes its message to the fatal handler.
+template <class E, class... Args>
+[[noreturn]] void fail(Args&&... args) {
+#if UNIFFI_CPP_EXCEPTIONS
+    throw E(std::forward<Args>(args)...);
+#else
+    fatal(E(std::forward<Args>(args)...).what());
+#endif
+}
+
+}  // namespace detail
+
+/// Replaces the fatal handler; `nullptr` restores the default.
+inline void set_fatal_handler(FatalHandler handler) { detail::fatal_handler_slot().store(handler); }
+
+/// The value of a successful `uniffi::Result`: `return uniffi::Ok{value};`, or
+/// `return uniffi::Ok{};` when there is none.
+template <class T = void>
+struct Ok {
+    explicit Ok(T v) : value(std::move(v)) {}
+    T value;
+};
+
+template <>
+struct Ok<void> {};
+
+template <class T>
+Ok(T) -> Ok<T>;
+Ok()->Ok<void>;
+
+/// The error of a failed `uniffi::Result`: `return uniffi::Err{std::make_shared<E_Variant>(...)};`.
+template <class E>
+struct Err {
+    explicit Err(E e) : error(std::move(e)) {}
+    E error;
+};
+
+template <class E>
+Err(E) -> Err<E>;
+
+/// What a call returns, without exceptions, when Rust declares an error: the value
+/// (none for `void`) or the error.
+template <class T, class E>
+class [[nodiscard]] Result {
+public:
+    using value_type = T;
+    using error_type = E;
+
+    template <class U, std::enable_if_t<!std::is_void_v<U>, int> = 0>
+    Result(Ok<U> ok) : data_(std::in_place_index<0>, std::move(ok.value)) {}
+
+    template <class V = T, std::enable_if_t<std::is_void_v<V>, int> = 0>
+    Result(Ok<void>) : data_(std::in_place_index<0>) {}
+
+    template <class F>
+    Result(Err<F> err) : data_(std::in_place_index<1>, std::move(err.error)) {}
+
+    bool has_value() const noexcept { return data_.index() == 0; }
+    explicit operator bool() const noexcept { return has_value(); }
+
+    /// The value. Holding an error instead is a bug: it fails (see `set_fatal_handler`).
+    decltype(auto) value() & {
+        require(true);
+        if constexpr (!std::is_void_v<T>) {
+            return *std::get_if<0>(&data_);
+        }
+    }
+    decltype(auto) value() const& {
+        require(true);
+        if constexpr (!std::is_void_v<T>) {
+            return *std::get_if<0>(&data_);
+        }
+    }
+    decltype(auto) value() && {
+        require(true);
+        if constexpr (!std::is_void_v<T>) {
+            return std::move(*std::get_if<0>(&data_));
+        }
+    }
+
+    /// The error. Holding a value instead is a bug: it fails.
+    E& error() & {
+        require(false);
+        return *std::get_if<1>(&data_);
+    }
+    const E& error() const& {
+        require(false);
+        return *std::get_if<1>(&data_);
+    }
+    E&& error() && {
+        require(false);
+        return std::move(*std::get_if<1>(&data_));
+    }
+
+    /// The value, or `fallback` when this holds an error.
+    template <class U, class V = T, std::enable_if_t<!std::is_void_v<V>, int> = 0>
+    V value_or(U&& fallback) const& {
+        return has_value() ? *std::get_if<0>(&data_) : static_cast<V>(std::forward<U>(fallback));
+    }
+
+private:
+    using Value = std::conditional_t<std::is_void_v<T>, std::monostate, T>;
+
+    void require(bool value) const {
+        if (has_value() != value) {
+            detail::fatal(value ? "uniffi::Result::value() on an error" : "uniffi::Result::error() on a value");
+        }
+    }
+
+    std::variant<Value, E> data_;
+};
+
+// ---------------------------------------------------------------------------
 // Wire format: big-endian, written by `Writer`, consumed by `Reader`.
 // ---------------------------------------------------------------------------
 
@@ -148,7 +296,7 @@ public:
 private:
     void need(size_t count) const {
         if (size_ - offset_ < count) {
-            throw InternalError("reading the requested value would read past the end of the buffer");
+            detail::fail<InternalError>("reading the requested value would read past the end of the buffer");
         }
     }
 
@@ -232,7 +380,7 @@ struct Codec<std::string> {
     static std::string read(Reader& r) {
         int32_t len = r.read_int<int32_t>();
         if (len < 0 || static_cast<size_t>(len) > r.remaining()) {
-            throw InternalError("string length out of bounds");
+            detail::fail<InternalError>("string length out of bounds");
         }
         std::string out(static_cast<size_t>(len), '\0');
         r.read_bytes(out.data(), out.size());
@@ -249,12 +397,12 @@ struct Codec<std::vector<T>> {
     static std::vector<T> read(Reader& r) {
         int32_t len = r.read_int<int32_t>();
         if (len < 0) {
-            throw InternalError("negative sequence length");
+            detail::fail<InternalError>("negative sequence length");
         }
         std::vector<T> out;
         if constexpr (std::is_same_v<T, uint8_t>) {
             if (static_cast<size_t>(len) > r.remaining()) {
-                throw InternalError("byte sequence length out of bounds");
+                detail::fail<InternalError>("byte sequence length out of bounds");
             }
             out.resize(static_cast<size_t>(len));
             r.read_bytes(out.data(), out.size());
@@ -290,7 +438,7 @@ struct Codec<std::optional<T>> {
         if (tag == 1) {
             return Codec<T>::read(r);
         }
-        throw InternalError("unexpected optional tag; should be 0 or 1");
+        detail::fail<InternalError>("unexpected optional tag; should be 0 or 1");
     }
     static void write(Writer& w, const std::optional<T>& v) {
         if (!v) {
@@ -307,7 +455,7 @@ struct Codec<std::map<K, V>> {
     static std::map<K, V> read(Reader& r) {
         int32_t len = r.read_int<int32_t>();
         if (len < 0) {
-            throw InternalError("negative map length");
+            detail::fail<InternalError>("negative map length");
         }
         std::map<K, V> out;
         for (int32_t i = 0; i < len; ++i) {
@@ -331,7 +479,7 @@ struct Codec<std::set<T>> {
     static std::set<T> read(Reader& r) {
         int32_t len = r.read_int<int32_t>();
         if (len < 0) {
-            throw InternalError("negative set length");
+            detail::fail<InternalError>("negative set length");
         }
         std::set<T> out;
         for (int32_t i = 0; i < len; ++i) {
@@ -374,13 +522,13 @@ public:
     const T* operator->() const { return &value(); }
     T& value() {
         if (!ptr_) {
-            throw InternalError("empty uniffi::Box");
+            detail::fail<InternalError>("empty uniffi::Box");
         }
         return *ptr_;
     }
     const T& value() const {
         if (!ptr_) {
-            throw InternalError("empty uniffi::Box");
+            detail::fail<InternalError>("empty uniffi::Box");
         }
         return *ptr_;
     }
@@ -399,7 +547,7 @@ struct Codec<Box<T>> {
 /// the duration of the call.
 inline ForeignBytes borrow_bytes(const std::vector<uint8_t>& bytes) {
     if (bytes.size() > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
-        throw InternalError("byte slice too large to lend to Rust");
+        detail::fail<InternalError>("byte slice too large to lend to Rust");
     }
     return ForeignBytes{static_cast<int32_t>(bytes.size()), bytes.data()};
 }
@@ -420,7 +568,7 @@ struct Codec<Timestamp> {
         // Nanoseconds since the epoch fit in int64_t for about 292 years either way.
         constexpr int64_t max_secs = std::numeric_limits<int64_t>::max() / 1000000000LL - 1;
         if (secs > max_secs || secs < -max_secs || nanos > 999999999u) {
-            throw InternalError("timestamp out of range for uniffi::Timestamp");
+            detail::fail<InternalError>("timestamp out of range for uniffi::Timestamp");
         }
         if (secs >= 0) {
             return Timestamp(ns(secs * 1000000000LL + static_cast<int64_t>(nanos)));
@@ -476,7 +624,7 @@ public:
         std::lock_guard<std::mutex> lock(mutex_);
         auto it = map_.find(handle);
         if (it == map_.end()) {
-            throw InternalError("the object in the handle map has been dropped already");
+            detail::fail<InternalError>("the object in the handle map has been dropped already");
         }
         return it->second;
     }
@@ -485,7 +633,7 @@ public:
         std::lock_guard<std::mutex> lock(mutex_);
         auto it = map_.find(handle);
         if (it == map_.end()) {
-            throw InternalError("the object in the handle map has been dropped already");
+            detail::fail<InternalError>("the object in the handle map has been dropped already");
         }
         T copy = it->second;
         return do_insert(std::move(copy));
@@ -495,7 +643,19 @@ public:
         std::lock_guard<std::mutex> lock(mutex_);
         auto it = map_.find(handle);
         if (it == map_.end()) {
-            throw InternalError("the object in the handle map has been dropped already");
+            detail::fail<InternalError>("the object in the handle map has been dropped already");
+        }
+        T out = std::move(it->second);
+        map_.erase(it);
+        return out;
+    }
+
+    /// `remove` that tolerates a stale handle.
+    std::optional<T> try_remove(uint64_t handle) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        auto it = map_.find(handle);
+        if (it == map_.end()) {
+            return std::nullopt;
         }
         T out = std::move(it->second);
         map_.erase(it);
@@ -696,12 +856,30 @@ struct SharedState {
     bool done = false;
     bool cancel_requested = false;
     std::optional<Value> value;
+    bool cancelled = false;
+#if UNIFFI_CPP_EXCEPTIONS
     std::exception_ptr error;
+#endif
     std::vector<std::function<void()>> on_done;
     /// Set by the producer: stops the work when the consumer cancels.
     std::function<void()> on_cancel;
 
-    void finish(std::optional<Value> v, std::exception_ptr e) {
+    void finish(Value v) {
+        complete([&] { value = std::move(v); });
+    }
+
+    void finish_cancelled() {
+        complete([&] { cancelled = true; });
+    }
+
+#if UNIFFI_CPP_EXCEPTIONS
+    void finish_error(std::exception_ptr e) {
+        complete([&] { error = std::move(e); });
+    }
+#endif
+
+    template <class Set>
+    void complete(Set set) {
         std::vector<std::function<void()>> callbacks;
         {
             std::lock_guard<std::mutex> lock(mutex);
@@ -709,8 +887,7 @@ struct SharedState {
                 return;
             }
             done = true;
-            value = std::move(v);
-            error = std::move(e);
+            set();
             callbacks.swap(on_done);
             on_cancel = nullptr;
         }
@@ -758,7 +935,7 @@ public:
     template <class U = T, class = std::enable_if_t<!std::is_void_v<U>>>
     static Future ready(U value) {
         Future future(std::make_shared<detail::SharedState<T>>());
-        future.state_->finish(std::move(value), nullptr);
+        future.state_->finish(std::move(value));
         return future;
     }
 
@@ -766,14 +943,15 @@ public:
     template <class U = T, class = std::enable_if_t<std::is_void_v<U>>>
     static Future ready() {
         Future future(std::make_shared<detail::SharedState<T>>());
-        future.state_->finish(std::monostate{}, nullptr);
+        future.state_->finish(std::monostate{});
         return future;
     }
 
+#if UNIFFI_CPP_EXCEPTIONS
     /// A future that failed with `error`.
     static Future failed(std::exception_ptr error) {
         Future future(std::make_shared<detail::SharedState<T>>());
-        future.state_->finish(std::nullopt, std::move(error));
+        future.state_->finish_error(std::move(error));
         return future;
     }
 
@@ -796,6 +974,7 @@ public:
         }).detach();
         return result;
     }
+#endif
 
     bool valid() const { return state_ != nullptr; }
 
@@ -816,17 +995,30 @@ public:
         return done ? std::future_status::ready : std::future_status::timeout;
     }
 
+    /// True once the future is complete because it was cancelled.
+    bool is_cancelled() const {
+        std::lock_guard<std::mutex> lock(state().mutex);
+        return state().done && state().cancelled;
+    }
+
     /// Waits for the result and returns it, or throws the error. Like
-    /// `std::future::get()` it can be called once.
+    /// `std::future::get()` it can be called once. A cancelled future throws
+    /// `uniffi::CancelledError`; without exceptions that is a failure, so check
+    /// `is_cancelled()` first.
     T get() {
         wait();
         auto state = std::move(state_);
+        if (state->cancelled) {
+            detail::fail<CancelledError>();
+        }
+#if UNIFFI_CPP_EXCEPTIONS
         if (state->error) {
             std::rethrow_exception(state->error);
         }
+#endif
         if constexpr (!std::is_void_v<T>) {
             if (!state->value) {
-                throw InternalError("a completed future has no value");
+                detail::fail<InternalError>("a completed future has no value");
             }
             return std::move(*state->value);
         }
@@ -879,7 +1071,7 @@ public:
 private:
     detail::SharedState<T>& state() const {
         if (!state_) {
-            throw std::future_error(std::future_errc::no_state);
+            detail::fail<InternalError>("the future has no state: it was moved from or its result was taken");
         }
         return *state_;
     }
@@ -898,15 +1090,17 @@ public:
 
     template <class U = T, class = std::enable_if_t<!std::is_void_v<U>>>
     void set_value(U value) const {
-        state_->finish(std::move(value), nullptr);
+        state_->finish(std::move(value));
     }
 
     template <class U = T, class = std::enable_if_t<std::is_void_v<U>>>
     void set_value() const {
-        state_->finish(std::monostate{}, nullptr);
+        state_->finish(std::monostate{});
     }
 
-    void set_exception(std::exception_ptr error) const { state_->finish(std::nullopt, std::move(error)); }
+#if UNIFFI_CPP_EXCEPTIONS
+    void set_exception(std::exception_ptr error) const { state_->finish_error(std::move(error)); }
+#endif
 
     /// True once the consumer (for a callback, Rust) no longer wants the result.
     bool is_cancelled() const {
@@ -970,7 +1164,8 @@ inline void poll_step(const std::shared_ptr<RustFuture>& future) {
 }
 
 /// Starts driving the Rust future `handle`. `complete` runs once it is ready, on
-/// the executor, and produces the result or throws.
+/// the executor, and returns the result (`std::monostate` for `void`), nothing if
+/// the future was cancelled, or throws.
 template <class R, class Complete>
 Future<R> start_future(uint64_t handle, PollFn poll, HandleFn cancel, HandleFn free_fn, Complete complete) {
     auto state = std::make_shared<SharedState<R>>();
@@ -980,16 +1175,22 @@ Future<R> start_future(uint64_t handle, PollFn poll, HandleFn cancel, HandleFn f
     future->cancel = cancel;
     future->free_fn = free_fn;
     future->finish = [state, complete, handle]() mutable {
+#if UNIFFI_CPP_EXCEPTIONS
         try {
-            if constexpr (std::is_void_v<R>) {
-                complete(handle);
-                state->finish(std::monostate{}, nullptr);
+#endif
+            // `complete` gives the value, or nothing if the Rust future was cancelled.
+            if (auto value = complete(handle)) {
+                state->finish(std::move(*value));
             } else {
-                state->finish(complete(handle), nullptr);
+                state->finish_cancelled();
             }
+#if UNIFFI_CPP_EXCEPTIONS
+        } catch (const CancelledError&) {
+            state->finish_cancelled();
         } catch (...) {
-            state->finish(std::nullopt, std::current_exception());
+            state->finish_error(std::current_exception());
         }
+#endif
     };
     std::weak_ptr<RustFuture> weak = future;
     state->on_cancel = [weak] {

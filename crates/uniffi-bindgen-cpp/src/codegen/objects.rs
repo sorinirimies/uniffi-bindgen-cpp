@@ -20,9 +20,9 @@ impl Gen<'_> {
                 )
             } else {
                 (
-                    "throw uniffi::InternalError(\"unexpected foreign handle for a Rust trait\");"
+                    "uniffi::detail::fail<uniffi::InternalError>(\"unexpected foreign handle for a Rust trait\");"
                         .to_owned(),
-                    "throw uniffi::InternalError(\"a Rust trait object cannot be implemented in C++\");"
+                    "uniffi::detail::fail<uniffi::InternalError>(\"a Rust trait object cannot be implemented in C++\");"
                         .to_owned(),
                 )
             };

@@ -39,22 +39,44 @@ impl Gen<'_> {
             }
         }
         let thrower = self.thrower(c);
+        let result = self.result_type_of(c);
+        // Without exceptions a Rust error returns early, as the `Err` of the result.
+        let on_error = |pad: &str| match (
+            self.result_error(c),
+            c.throws_type().and_then(|t| self.error_lifter(t)),
+        ) {
+            (Some(_), Some(lifter)) => format!(
+                "{pad}if (uniffi_status.code == uniffi::CALL_ERROR) {{\n{pad}    return {result}(uniffi::Err{{{lifter}(uniffi_status.error_buf)}});\n{pad}}}\n"
+            ),
+            _ => String::new(),
+        };
+        // The value a successful call returns, if any.
+        let success = |lifted: Option<String>| -> Option<String> {
+            if self.result_error(c).is_some() {
+                Some(format!(
+                    "{result}(uniffi::Ok{{{}}})",
+                    lifted.unwrap_or_default()
+                ))
+            } else {
+                lifted
+            }
+        };
+        let lifted = c.return_type().map(|t| self.lift(t, "uniffi_result"));
+        let assign = if c.return_type().is_some() {
+            "auto uniffi_result = "
+        } else {
+            ""
+        };
         let mut out = String::new();
         let _ = writeln!(out, "{indent}uniffi_detail::ensure_init();");
         if c.is_async() {
-            let ret_cpp = c
-                .return_type()
-                .map_or_else(|| "void".to_owned(), |t| self.cpp_type(t));
-            let (assign, ret_line) = match c.return_type() {
-                Some(t) => (
-                    "auto uniffi_result = ",
-                    format!(
-                        "{indent}        return {};\n",
-                        self.lift(t, "uniffi_result")
-                    ),
-                ),
-                None => ("", String::new()),
+            let slot = if result == "void" {
+                "std::monostate".to_owned()
+            } else {
+                result.clone()
             };
+            let value = success(lifted).unwrap_or_else(|| "std::monostate{}".to_owned());
+            let inner = format!("{indent}        ");
             let _ = writeln!(
                 out,
                 "{indent}uint64_t uniffi_future = ffi::{ffi_name}({});",
@@ -62,32 +84,25 @@ impl Gen<'_> {
             );
             let _ = writeln!(
                 out,
-                "{indent}return uniffi::detail::start_future<{ret_cpp}>(\n{indent}    uniffi_future, &ffi::{poll}, &ffi::{cancel}, &ffi::{free},\n{indent}    [](uint64_t uniffi_handle) -> {ret_cpp} {{\n{indent}        uniffi::RustCallStatus uniffi_status{{}};\n{indent}        {assign}ffi::{complete}(uniffi_handle, &uniffi_status);\n{indent}        uniffi_detail::check_status(uniffi_status{thrower});\n{ret_line}{indent}    }});",
+                "{indent}return uniffi::detail::start_future<{result}>(\n{indent}    uniffi_future, &ffi::{poll}, &ffi::{cancel}, &ffi::{free},\n{indent}    [](uint64_t uniffi_handle) -> std::optional<{slot}> {{\n{inner}uniffi::RustCallStatus uniffi_status{{}};\n{inner}{assign}ffi::{complete}(uniffi_handle, &uniffi_status);\n{inner}if (uniffi_status.code == uniffi::CALL_CANCELLED) {{\n{inner}    return std::nullopt;\n{inner}}}\n{on_error}{inner}uniffi_detail::check_status(uniffi_status{thrower});\n{inner}return {value};\n{indent}    }});",
                 poll = c.ffi_rust_future_poll(self.ci),
                 cancel = c.ffi_rust_future_cancel(self.ci),
                 free = c.ffi_rust_future_free(self.ci),
                 complete = c.ffi_rust_future_complete(self.ci),
+                on_error = on_error(&inner),
             );
         } else {
             args.push("&uniffi_status".to_owned());
             let call = format!("ffi::{ffi_name}({})", args.join(", "));
             let _ = writeln!(out, "{indent}uniffi::RustCallStatus uniffi_status{{}};");
-            match c.return_type() {
-                Some(t) => {
-                    let _ = writeln!(out, "{indent}auto uniffi_result = {call};");
-                    let _ = writeln!(
-                        out,
-                        "{indent}uniffi_detail::check_status(uniffi_status{thrower});"
-                    );
-                    let _ = writeln!(out, "{indent}return {};", self.lift(t, "uniffi_result"));
-                }
-                None => {
-                    let _ = writeln!(out, "{indent}{call};");
-                    let _ = writeln!(
-                        out,
-                        "{indent}uniffi_detail::check_status(uniffi_status{thrower});"
-                    );
-                }
+            let _ = writeln!(out, "{indent}{assign}{call};");
+            out.push_str(&on_error(&indent));
+            let _ = writeln!(
+                out,
+                "{indent}uniffi_detail::check_status(uniffi_status{thrower});"
+            );
+            if let Some(value) = success(lifted) {
+                let _ = writeln!(out, "{indent}return {value};");
             }
         }
         out
@@ -95,6 +110,9 @@ impl Gen<'_> {
 
     /// `, &throw_buf_Err` for callables that throw an error enum.
     fn thrower(&self, c: &dyn Callable) -> String {
+        if !self.exceptions() {
+            return String::new();
+        }
         c.throws_type()
             .map(|t| self.thrower_for(t))
             .unwrap_or_default()

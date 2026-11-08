@@ -10,18 +10,26 @@ const FIXTURE = "fixtures/tour"
 
 use cxx.nu
 
-# Arguments that compile the generated bindings and the test into `output`.
-export def compile_args [out_dir: string, lib_dir: string, output: string, sanitize: bool] {
+# The C++ test: bindings generated with --no-exceptions have their own.
+export def test_file [exceptions: bool] {
+    if $exceptions { "test_tour.cpp" } else { "test_tour_noexcept.cpp" }
+}
+
+# Arguments that compile the generated bindings and the test into `output`;
+# without exceptions, with -fno-exceptions.
+export def compile_args [out_dir: string, lib_dir: string, output: string, sanitize: bool, exceptions: bool = true] {
+    let no_exceptions = if $exceptions { [] } else { ["-fno-exceptions"] }
     [
         ...(cxx flags $sanitize)
-        $"($out_dir)/tour.cpp" $"($out_dir)/test_tour.cpp"
+        ...$no_exceptions
+        $"($out_dir)/tour.cpp" $"($out_dir)/(test_file $exceptions)"
         $"-I($out_dir)"
         ...(cxx link_args $lib_dir "tour")
         "-o" $output
     ]
 }
 
-def main [--sanitize] {
+def main [--sanitize, --no-exceptions] {
     let root = ($env.FILE_PWD | path dirname | path dirname)
     cd $root
     print -e "▶ building the tour fixture"
@@ -31,13 +39,14 @@ def main [--sanitize] {
     let out_dir = (mktemp --directory)
 
     print -e "▶ generating bindings"
-    ^cargo run --quiet -p uniffi-bindgen-cpp -- generate $lib --out-dir $out_dir --no-format --metadata-no-deps
-    cp $"($FIXTURE)/cpp/test_tour.cpp" $out_dir
+    let mode = if $no_exceptions { ["--no-exceptions"] } else { [] }
+    ^cargo run --quiet -p uniffi-bindgen-cpp -- generate $lib --out-dir $out_dir --no-format --metadata-no-deps ...$mode
+    cp $"($FIXTURE)/cpp/(test_file (not $no_exceptions))" $out_dir
 
     let compiler = (cxx compiler ($env.CXX? | default "") (cxx available))
     let output = ($out_dir | path join test_tour)
     print -e $"▶ compiling with ($compiler)"
-    ^$compiler ...(compile_args $out_dir $lib_dir $output $sanitize)
+    ^$compiler ...(compile_args $out_dir $lib_dir $output $sanitize (not $no_exceptions))
 
     print -e "▶ running"
     with-env {ASAN_OPTIONS: "detect_leaks=0"} { ^$output }
