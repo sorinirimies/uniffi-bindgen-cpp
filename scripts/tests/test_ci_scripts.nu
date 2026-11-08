@@ -4,6 +4,7 @@
 
 use std/assert
 use runner.nu *
+use ../ci/fresh_install.nu [crate_file crate_version]
 use ../ci/deps_update.nu [present commit_message series lock_versions downgrades pins pins_changed next_patch upgrade_message]
 use ../ci/publish_crate.nu [already_published package_args]
 use ../ci/apt.nu [commands]
@@ -258,6 +259,13 @@ def "test install_clang_tidy: the wheel is picked by tag, never the sdist" [] {
     ]
     assert equal (wheel_url $files "manylinux_2_27_x86_64") "gnu"
     assert error { wheel_url $files "macosx_11_0_arm64" }
+}
+
+def "test fresh_install: the packaged crate and its version" [] {
+    assert equal (crate_file "/t" "a-b" "1.2.3") "/t/package/a-b-1.2.3.crate"
+    let metadata = {packages: [{name: "a", version: "1.0.0"} {name: "b", version: "2.0.0"}]}
+    assert equal (crate_version $metadata "b") "2.0.0"
+    assert error { crate_version $metadata "c" }
 }
 
 def main [] { run-tests }
