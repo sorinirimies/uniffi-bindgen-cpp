@@ -346,3 +346,22 @@ fn only_values_that_are_not_trivially_copyable_are_moved() {
         "a record holding a string is moved"
     );
 }
+
+#[test]
+fn display_types_get_a_std_formatter_where_format_exists() {
+    let udl = r#"
+namespace shown { };
+[Traits=(Display)] interface Thing { constructor(); };
+[Traits=(Display)] dictionary Point { i32 x; };
+"#;
+    let h = generate_from_udl(udl, "shown", &Config::default())
+        .expect("generates")
+        .header;
+    assert!(h.contains("#if defined(__cpp_lib_format)"));
+    assert!(h.contains("struct formatter<::shown::Thing> : formatter<string_view>"));
+    // A header without Display types has no <format> block at all.
+    let plain = generate_from_udl("namespace plain { u8 f(); };", "plain", &Config::default())
+        .expect("generates")
+        .header;
+    assert!(!plain.contains("__cpp_lib_format"));
+}

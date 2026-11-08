@@ -338,6 +338,55 @@ impl Gen<'_> {
         format!("namespace std {{\n\n{out}}}  // namespace std\n\n")
     }
 
+    /// Types with a Rust `Display`, and the expression giving their text from `value`.
+    fn displayable(&self) -> Vec<(String, String)> {
+        let mut out = Vec::new();
+        for v in self.value_types() {
+            if v.traits.display_fmt.is_none() {
+                continue;
+            }
+            let full = self.local(v.name);
+            match v.kind {
+                ValueKind::Record | ValueKind::DataEnum => {
+                    out.push((full, "value.to_string()".to_owned()));
+                }
+                ValueKind::FlatEnum => {
+                    out.push((full, format!("::{}::to_string(value)", self.ns)));
+                }
+                // Exceptions already have what().
+                ValueKind::Error => {}
+            }
+        }
+        for obj in self.ci.object_definitions() {
+            let abstract_class = obj.is_trait_interface() || obj.has_callback_interface();
+            if obj.uniffi_trait_methods().display_fmt.is_some()
+                && !abstract_class
+                && !self.is_error_object(obj.name())
+            {
+                out.push((self.local(obj.name()), "value.to_string()".to_owned()));
+            }
+        }
+        out
+    }
+
+    /// `std::formatter` for every type with a Rust `Display`, where the standard library has
+    /// `<format>` (C++20): `std::format("{}", value)` gives the Rust text.
+    pub(crate) fn value_std_format(&self) -> String {
+        let mut specializations = String::new();
+        for (full, text) in self.displayable() {
+            let _ = writeln!(
+                specializations,
+                "template <>\nstruct formatter<{full}> : formatter<string_view> {{\n    template <class FormatContext>\n    auto format(const {full}& value, FormatContext& ctx) const {{\n        return formatter<string_view>::format({text}, ctx);\n    }}\n}};\n"
+            );
+        }
+        if specializations.is_empty() {
+            return specializations;
+        }
+        format!(
+            "#if defined(__has_include)\n#if __has_include(<version>)\n#include <version>\n#endif\n#endif\n#if defined(__cpp_lib_format)\n#include <format>\nnamespace std {{\n\n{specializations}}}  // namespace std\n#endif\n\n"
+        )
+    }
+
     /// Out-of-class definitions of the members of every value type.
     pub(crate) fn value_member_definitions(&self) -> String {
         let mut out = String::new();

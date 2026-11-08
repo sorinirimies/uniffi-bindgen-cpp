@@ -165,6 +165,7 @@ impl Gen<'_> {
         let _ = writeln!(out, "}}  // namespace {ns}\n");
         out.push_str(&self.emit_codecs());
         out.push_str(&self.value_std_hash());
+        out.push_str(&self.value_std_format());
         out
     }
 

@@ -138,7 +138,7 @@ value first, for an `enum class`). Exported uniffi traits become:
 
 | Rust | C++ |
 |---|---|
-| `Display` | `to_string()`, `operator<<`, and `what()` of an error |
+| `Display` | `to_string()`, `operator<<`, `std::format("{}", value)` where the standard library has `<format>` (C++20), and `what()` of an error |
 | `Debug` | `debug_string()` |
 | `Eq` | `==`, `!=` |
 | `Ord` | `compare()`, `<`, `>`, `<=`, `>=` |
