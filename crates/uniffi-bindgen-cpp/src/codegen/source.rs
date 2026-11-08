@@ -199,7 +199,7 @@ uniffi::RustBuffer lower_error(const E& error) {
     return buffer_from_bytes(writer.bytes().data(), writer.bytes().size());
 }
 
-[[maybe_unused]] uniffi::RustBuffer lower_string(const std::string& value) {
+[[maybe_unused]] uniffi::RustBuffer lower_string(std::string_view value) {
     return buffer_from_bytes(reinterpret_cast<const uint8_t*>(value.data()), value.size());
 }
 

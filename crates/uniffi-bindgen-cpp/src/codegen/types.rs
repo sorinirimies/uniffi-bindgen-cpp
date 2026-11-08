@@ -130,9 +130,12 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// How a parameter of type `t` is declared.
-    pub(crate) fn param_type(&self, t: &Type) -> String {
+    /// How a parameter of type `t` is declared. `view`: a string is taken as a
+    /// `std::string_view` (calls into Rust, which copy it straight into a buffer);
+    /// virtual methods implemented in C++ take `const std::string&`.
+    pub(crate) fn param_type(&self, t: &Type, view: bool) -> String {
         match t {
+            Type::String if view => "std::string_view".to_owned(),
             Type::UInt8
             | Type::Int8
             | Type::UInt16

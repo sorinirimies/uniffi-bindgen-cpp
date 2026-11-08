@@ -161,7 +161,7 @@ public:
     Thing(const Thing&) = delete;
     Thing& operator=(const Thing&) = delete;
 
-    static std::shared_ptr<::sample::Thing> new_(const std::string& name);
+    static std::shared_ptr<::sample::Thing> new_(std::string_view name);
     static std::shared_ptr<::sample::Thing> other(uint32_t n);
     void check() const;
     uniffi::Future<uint32_t> later() const;
@@ -178,13 +178,13 @@ uint32_t add(uint32_t a, uint32_t b);
 
 std::map<std::string, uint32_t> counts();
 
-uniffi::Future<std::string> fetch(const std::string& key);
+uniffi::Future<std::string> fetch(std::string_view key);
 
 std::vector<std::string> names();
 
 std::vector<uint8_t> reverse(const std::vector<uint8_t>& data);
 
-std::string risky(const std::string& s);
+std::string risky(std::string_view s);
 
 ::sample::Shape shape_of(const ::sample::Point& p, double radius = 2.5);
 

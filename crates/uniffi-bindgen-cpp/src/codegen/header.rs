@@ -416,10 +416,16 @@ impl Gen<'_> {
             .map_or_else(|| "{}".to_owned(), |d| format!(" = {d}"))
     }
 
-    /// `R name(args)` with default arguments (header) or without (source).
+    /// `R name(args)` with default arguments (header) or without (source), for a call into Rust.
     pub(crate) fn signature(&self, c: &dyn Callable, name: &str, with_defaults: bool) -> String {
         let ret = self.return_type_of(c);
         format!("{ret} {name}({})", self.param_list(c, with_defaults))
+    }
+
+    /// `R name(args)` of a virtual method, which C++ may implement: owned parameter types.
+    pub(crate) fn virtual_signature(&self, c: &dyn Callable, name: &str) -> String {
+        let ret = self.return_type_of(c);
+        format!("{ret} {name}({})", self.param_list_of(c, false, false))
     }
 
     pub(crate) fn return_type_of(&self, c: &dyn Callable) -> String {
@@ -433,7 +439,12 @@ impl Gen<'_> {
         }
     }
 
+    /// The parameters of a call into Rust.
     pub(crate) fn param_list(&self, c: &dyn Callable, with_defaults: bool) -> String {
+        self.param_list_of(c, with_defaults, true)
+    }
+
+    fn param_list_of(&self, c: &dyn Callable, with_defaults: bool, view: bool) -> String {
         let args = c.arguments();
         // C++ only allows defaults on the trailing parameters.
         let first_defaulted = args
@@ -444,7 +455,7 @@ impl Gen<'_> {
             .enumerate()
             .map(|(i, a)| {
                 let ty = a.as_type();
-                let mut s = format!("{} {}", self.param_type(&ty), var(a.name()));
+                let mut s = format!("{} {}", self.param_type(&ty, view), var(a.name()));
                 if with_defaults
                     && i >= first_defaulted
                     && let Some(d) = a.default_value().and_then(|d| self.default_value(d, &ty))
@@ -469,7 +480,7 @@ impl Gen<'_> {
             let _ = writeln!(
                 out,
                 "    virtual {} = 0;",
-                self.signature(m, &member(m.name(), cb.name()), false)
+                self.virtual_signature(m, &member(m.name(), cb.name()))
             );
         }
         let _ = writeln!(out, "}};\n");
@@ -492,7 +503,7 @@ impl Gen<'_> {
                 let _ = writeln!(
                     out,
                     "    virtual {} = 0;",
-                    self.signature(m, &member(m.name(), obj.name()), false)
+                    self.virtual_signature(m, &member(m.name(), obj.name()))
                 );
             }
         } else if abstract_class {
@@ -505,7 +516,7 @@ impl Gen<'_> {
                 let _ = writeln!(
                     out,
                     "    virtual {} = 0;",
-                    self.signature(m, &member(m.name(), obj.name()), false)
+                    self.virtual_signature(m, &member(m.name(), obj.name()))
                 );
             }
         } else if self.is_error_object(obj.name()) {

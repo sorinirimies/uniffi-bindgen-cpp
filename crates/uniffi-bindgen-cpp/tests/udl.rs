@@ -70,8 +70,8 @@ fn header_declares_every_kind_of_definition() {
         "#pragma once",
         "namespace sample {",
         "uint32_t add(uint32_t a, uint32_t b);",
-        "std::string risky(const std::string& s);",
-        "uniffi::Future<std::string> fetch(const std::string& key);",
+        "std::string risky(std::string_view s);",
+        "uniffi::Future<std::string> fetch(std::string_view key);",
         "std::vector<std::string> names();",
         "std::map<std::string, uint32_t> counts();",
         "enum class Color : int32_t {",
@@ -84,7 +84,7 @@ fn header_declares_every_kind_of_definition() {
         "class Oops_Bad final : public Oops {",
         "class Detailed_Code final : public Detailed {",
         "class Thing {",
-        "static std::shared_ptr<::sample::Thing> new_(const std::string& name);",
+        "static std::shared_ptr<::sample::Thing> new_(std::string_view name);",
         "static std::shared_ptr<::sample::Thing> other(uint32_t n);",
         "uniffi::Future<uint32_t> later() const;",
         "class Sink {",
@@ -312,4 +312,22 @@ fn generated_header_snapshot() {
 #[test]
 fn generated_source_snapshot() {
     insta::assert_snapshot!("sample_source", generate().source);
+}
+
+#[test]
+fn string_parameters_of_calls_into_rust_are_views() {
+    let udl = r#"
+namespace views { string echo(string s); void use_sink(Sink sink); };
+interface Thing { constructor(string name); string rename(string to); };
+callback interface Sink { string push(string s); };
+[Trait, WithForeign] interface Shape { string label(string prefix); };
+"#;
+    let files = generate_from_udl(udl, "views", &Config::default()).expect("generates");
+    let h = &files.header;
+    assert!(h.contains("std::string echo(std::string_view s);"));
+    assert!(h.contains("std::string_view name"), "constructor");
+    assert!(h.contains("rename(std::string_view to)"));
+    // Virtual methods are implemented in C++: overriding them must keep owned types.
+    assert!(h.contains("virtual std::string push(const std::string& s) = 0;"));
+    assert!(h.contains("virtual std::string label(const std::string& prefix) = 0;"));
 }

@@ -252,7 +252,7 @@ uniffi::RustBuffer lower_error(const E& error) {
     return buffer_from_bytes(writer.bytes().data(), writer.bytes().size());
 }
 
-[[maybe_unused]] uniffi::RustBuffer lower_string(const std::string& value) {
+[[maybe_unused]] uniffi::RustBuffer lower_string(std::string_view value) {
     return buffer_from_bytes(reinterpret_cast<const uint8_t*>(value.data()), value.size());
 }
 
@@ -448,7 +448,7 @@ uint64_t Thing::uniffi_clone_handle() const {
     return handle;
 }
 
-std::shared_ptr<::sample::Thing> Thing::new_(const std::string& name) {
+std::shared_ptr<::sample::Thing> Thing::new_(std::string_view name) {
     uniffi_detail::ensure_init();
     uniffi::RustCallStatus uniffi_status{};
     auto uniffi_result = ffi::uniffi_sample_fn_constructor_thing_new(uniffi_detail::lower_string(name), &uniffi_status);
@@ -508,7 +508,7 @@ std::map<std::string, uint32_t> counts() {
     return uniffi_detail::lift_buf<std::map<std::string, uint32_t>>(uniffi_result);
 }
 
-uniffi::Future<std::string> fetch(const std::string& key) {
+uniffi::Future<std::string> fetch(std::string_view key) {
     uniffi_detail::ensure_init();
     uint64_t uniffi_future = ffi::uniffi_sample_fn_func_fetch(uniffi_detail::lower_string(key));
     return uniffi::detail::start_future<std::string>(
@@ -537,7 +537,7 @@ std::vector<uint8_t> reverse(const std::vector<uint8_t>& data) {
     return uniffi_detail::lift_buf<std::vector<uint8_t>>(uniffi_result);
 }
 
-std::string risky(const std::string& s) {
+std::string risky(std::string_view s) {
     uniffi_detail::ensure_init();
     uniffi::RustCallStatus uniffi_status{};
     auto uniffi_result = ffi::uniffi_sample_fn_func_risky(uniffi_detail::lower_string(s), &uniffi_status);

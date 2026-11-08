@@ -46,6 +46,11 @@ static void test_primitives() {
     CHECK(tour::invert(false) == true);
     CHECK(tour::shout("héllo") == "HÉLLO");
     CHECK(tour::shout("") == "");
+    // String parameters are views: a substring that is not NUL-terminated goes by its length.
+    const std::string_view sentence = "hello world";
+    CHECK(tour::shout(sentence.substr(0, 5)) == "HELLO");
+    const std::string owned = "abc";
+    CHECK(tour::shout(owned) == "ABC");
     CHECK((tour::reverse_bytes({1, 2, 3}) == std::vector<uint8_t>{3, 2, 1}));
     tour::nothing();
     CHECK(tour::greet("Ada") == "Hello, Ada!");

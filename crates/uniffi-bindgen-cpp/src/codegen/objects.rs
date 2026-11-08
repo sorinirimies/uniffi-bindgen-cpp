@@ -116,7 +116,7 @@ impl Gen<'_> {
             let _ = writeln!(
                 out,
                 "    {} override {{\n{}    }}\n",
-                self.signature(m, &member(m.name(), obj.name()), false),
+                self.virtual_signature(m, &member(m.name(), obj.name())),
                 self.call_body(m, Some("uniffi_clone_handle()"), None, 8)
             );
         }

@@ -109,7 +109,7 @@ int main() {
 | UniFFI | C++ |
 |---|---|
 | `u8`…`u64`, `i8`…`i64`, `f32`, `f64`, `bool` | `uint8_t`…`int64_t`, `float`, `double`, `bool` |
-| `String` | `std::string` (Rust rejects invalid UTF-8 with an error) |
+| `String` | `std::string`; parameters of calls into Rust are `std::string_view`, overridable virtual methods take `const std::string&` (Rust rejects invalid UTF-8 with an error) |
 | `Vec<u8>` / bytes | `std::vector<uint8_t>`; lent to Rust without a copy for `&[u8]` arguments |
 | `Vec<T>` | `std::vector<T>` |
 | `Option<T>` | `std::optional<T>` |
