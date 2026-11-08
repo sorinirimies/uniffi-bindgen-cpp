@@ -4,6 +4,28 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.3.0](https://github.com/sorinirimies/uniffi-bindgen-cpp/compare/v0.2.0...v0.3.0) — 2026-11-08
+
+### ⚠️ Breaking changes
+
+- Bindings for code built with -fno-exceptions ([`03451eb`](https://github.com/sorinirimies/uniffi-bindgen-cpp/commit/03451eb5b6fbcce2395b36b9fecbafcc4d1bfeb3))
+- String parameters of calls into Rust are std::string_view ([`33dae77`](https://github.com/sorinirimies/uniffi-bindgen-cpp/commit/33dae776310cab6505dbb0e75de23d10289299f4))
+
+### ✨ Features
+
+- Bindings for code built with -fno-exceptions ([`03451eb`](https://github.com/sorinirimies/uniffi-bindgen-cpp/commit/03451eb5b6fbcce2395b36b9fecbafcc4d1bfeb3))
+- Std::formatter for types with a Rust Display ([`9968cdf`](https://github.com/sorinirimies/uniffi-bindgen-cpp/commit/9968cdfe615b48b257fccf167a7d908de8689e1c))
+- String parameters of calls into Rust are std::string_view ([`33dae77`](https://github.com/sorinirimies/uniffi-bindgen-cpp/commit/33dae776310cab6505dbb0e75de23d10289299f4))
+
+### 🧪 Tests
+
+- C++ tests for the gh-2600 and mutable-records fixtures ([`34a3b7f`](https://github.com/sorinirimies/uniffi-bindgen-cpp/commit/34a3b7fa831d9306b3f7e674f43ebfa19b385abb))
+
+### 🔄 CI and release
+
+- Pin clang-tidy 23.1.4 on both forges ([`a38da92`](https://github.com/sorinirimies/uniffi-bindgen-cpp/commit/a38da92150764e36fe19e9dee683623374353c80))
+- Clang-tidy on the generated C++, and its findings fixed ([`1c94a5a`](https://github.com/sorinirimies/uniffi-bindgen-cpp/commit/1c94a5a1e5358506c66deaa89a65acb219df394b))
+
 ## [0.2.0](https://github.com/sorinirimies/uniffi-bindgen-cpp/compare/v0.1.1...v0.2.0) — 2026-11-07
 
 ### ⚠️ Breaking changes
