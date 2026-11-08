@@ -49,6 +49,10 @@ run *args:
 test:
     cargo test --workspace --all-features
 
+# clang-tidy on the tour fixture's generated C++ (CLANG_TIDY overrides the executable)
+tidy:
+    nu scripts/ci/clang_tidy.nu
+
 # Generate C++ for the tour fixture, compile it and run the C++ test (add --sanitize for ASan/UBSan)
 e2e *args:
     nu scripts/ci/cpp_e2e.nu {{ args }}

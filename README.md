@@ -230,6 +230,7 @@ just check-all    # the quality gate: fmt, clippy, tests, versions, nu tests
 just e2e          # generate C++ for the tour fixture, compile and run it
 just fixtures     # the same for uniffi's fixture suite (add --sanitize, or --only <lib>)
 just cmake        # build and test the CMake examples
+just tidy         # clang-tidy on the generated C++ (.clang-tidy; findings fail CI)
 just fuzz-all     # every cargo-fuzz target (nightly)
 just audit deny   # supply chain
 just update-deps  # cargo update (+ fuzz/) → gate → commit → push

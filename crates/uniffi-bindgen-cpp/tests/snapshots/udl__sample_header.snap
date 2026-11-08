@@ -38,7 +38,7 @@ protected:
 
 class Detailed_Code final : public Detailed {
 public:
-    Detailed_Code(int32_t code_) : Detailed("Detailed::Code"), code(std::move(code_)) {}
+    Detailed_Code(int32_t code_) : Detailed("Detailed::Code"), code(code_) {}
     int32_t code;
 
     int32_t uniffi_variant_index() const override { return 1; }
@@ -334,7 +334,7 @@ inline std::shared_ptr<::sample::Detailed> Codec<std::shared_ptr<::sample::Detai
     switch (reader.read_int<int32_t>()) {
         case 1: {
             auto f0 = Codec<int32_t>::read(reader);
-            return std::make_shared<::sample::Detailed_Code>(std::move(f0));
+            return std::make_shared<::sample::Detailed_Code>(f0);
         }
         case 2: {
             return std::make_shared<::sample::Detailed_Empty>();
@@ -370,7 +370,7 @@ inline ::sample::Point Codec<::sample::Point>::read(Reader& reader) {
     auto f0 = Codec<double>::read(reader);
     auto f1 = Codec<double>::read(reader);
     auto f2 = Codec<std::optional<std::string>>::read(reader);
-    return ::sample::Point{std::move(f0), std::move(f1), std::move(f2)};
+    return ::sample::Point{f0, f1, std::move(f2)};
 }
 
 inline void Codec<::sample::Point>::write(Writer& writer, const ::sample::Point& value) {
@@ -387,7 +387,7 @@ inline ::sample::Shape Codec<::sample::Shape>::read(Reader& reader) {
         case 1: {
             auto f0 = Codec<::sample::Point>::read(reader);
             auto f1 = Codec<double>::read(reader);
-            return ::sample::Shape(::sample::Shape::Circle{std::move(f0), std::move(f1)});
+            return ::sample::Shape(::sample::Shape::Circle{std::move(f0), f1});
         }
         case 2: {
             return ::sample::Shape(::sample::Shape::Empty{});
@@ -414,6 +414,7 @@ inline void Codec<::sample::Shape>::write(Writer& writer, const ::sample::Shape&
             writer.write_int<int32_t>(2);
             return;
         }
+        default: break;
     }
     throw InternalError("unexpected enum value");
 }

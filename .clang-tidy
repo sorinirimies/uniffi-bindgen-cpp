@@ -1,0 +1,27 @@
+# clang-tidy for the generated C++ (scripts/ci/clang_tidy.nu runs it on the tour fixture's
+# bindings and the runtime header; every finding fails CI). Each disabled check says why.
+Checks: >
+  -*,
+  bugprone-*,
+  performance-*,
+  clang-analyzer-*,
+  modernize-use-override,
+  modernize-use-nullptr,
+  modernize-use-equals-default,
+  readability-misleading-indentation,
+  cppcoreguidelines-slicing,
+  -bugprone-easily-swappable-parameters,
+  -performance-enum-size,
+  -bugprone-exception-copy-constructor-throws,
+  -clang-analyzer-deadcode.DeadStores,
+  -bugprone-empty-catch,
+  -performance-no-int-to-ptr
+# Why the exclusions:
+#   easily-swappable-parameters     parameter lists are the Rust API's
+#   enum-size                       enums are int32_t, the wire format's discriminant
+#   exception-copy-constructor-throws  errors carry strings; std::runtime_error does too
+#   DeadStores                      false positives on RAII guards (BufferGuard) that free a buffer
+#   empty-catch                     free callbacks must not throw into Rust; a stale handle is ignored
+#   no-int-to-ptr                   Rust hands back a future's callback data as an integer
+WarningsAsErrors: '*'
+HeaderFilterRegex: '.*'

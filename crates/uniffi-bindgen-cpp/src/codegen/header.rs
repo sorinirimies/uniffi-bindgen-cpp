@@ -7,7 +7,7 @@ use uniffi_bindgen::interface::{
     AsType, Callable, CallbackInterface, DefaultValue, Enum, Literal, Object, Record, Type,
 };
 
-use super::names::{class, doc, field, member, var};
+use super::names::{class, doc, field, member, string_literal, var};
 use super::types::Gen;
 use super::values::{ValueKind, trait_declarations};
 
@@ -383,7 +383,10 @@ impl Gen<'_> {
                     let fname = member(&field(f.name(), j), &vname);
                     let ty = self.cpp_type(&f.as_type());
                     params.push(format!("{ty} {fname}_"));
-                    inits.push(format!("{fname}(std::move({fname}_))"));
+                    inits.push(format!(
+                        "{fname}({})",
+                        self.moved(&f.as_type(), &format!("{fname}_"))
+                    ));
                     members.push_str(&format!("    {ty} {fname};\n"));
                 }
                 (params.join(", "), inits.join(", "), members)
@@ -458,7 +461,13 @@ impl Gen<'_> {
                 let mut s = format!("{} {}", self.param_type(&ty, view), var(a.name()));
                 if with_defaults
                     && i >= first_defaulted
-                    && let Some(d) = a.default_value().and_then(|d| self.default_value(d, &ty))
+                    && let Some(d) = a.default_value().and_then(|d| match d {
+                        // A view of the literal itself: no std::string temporary.
+                        DefaultValue::Literal(Literal::String(s)) if view => {
+                            Some(string_literal(s))
+                        }
+                        _ => self.default_value(d, &ty),
+                    })
                 {
                     s.push_str(&format!(" = {d}"));
                 }
@@ -711,7 +720,7 @@ impl Gen<'_> {
         for (i, f) in r.fields().iter().enumerate() {
             let ty = self.cpp_type(&f.as_type());
             read.push_str(&format!("    auto f{i} = Codec<{ty}>::read(reader);\n"));
-            args.push(format!("std::move(f{i})"));
+            args.push(self.moved(&f.as_type(), &format!("f{i}")));
             write.push_str(&format!(
                 "    Codec<{ty}>::write(writer, value.{});\n",
                 member(f.name(), r.name())
@@ -753,7 +762,7 @@ impl Gen<'_> {
                 body.push_str(&format!(
                     "            auto f{j} = Codec<{ty}>::read(reader);\n"
                 ));
-                args.push(format!("std::move(f{j})"));
+                args.push(self.moved(&f.as_type(), &format!("f{j}")));
                 writes.push_str(&format!(
                     "            Codec<{ty}>::write(writer, variant.{});\n",
                     member(&field(f.name(), j), &vname)
@@ -770,7 +779,9 @@ impl Gen<'_> {
             ));
         }
         read.push_str("        default: throw InternalError(\"unexpected enum case\");\n    }\n");
-        write.push_str("    }\n    throw InternalError(\"unexpected enum value\");\n");
+        write.push_str(
+            "        default: break;\n    }\n    throw InternalError(\"unexpected enum value\");\n",
+        );
         self.value_codec(&full, &format!("const {full}&"), &read, &write)
     }
 
@@ -795,7 +806,7 @@ impl Gen<'_> {
                     body.push_str(&format!(
                         "            auto f{j} = Codec<{ty}>::read(reader);\n"
                     ));
-                    args.push(format!("std::move(f{j})"));
+                    args.push(self.moved(&f.as_type(), &format!("f{j}")));
                 }
                 read.push_str(&format!(
                     "        case {}: {{\n{body}            return std::make_shared<{vfull}>({});\n        }}\n",

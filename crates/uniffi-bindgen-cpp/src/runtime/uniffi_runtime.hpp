@@ -110,12 +110,12 @@ public:
         static_assert(std::is_integral_v<T> && !std::is_same_v<T, bool>);
         need(sizeof(T));
         using U = std::make_unsigned_t<T>;
-        U value = 0;
+        uint64_t value = 0;  // wide and unsigned: no promotion to int, no signed shifts
         for (size_t i = 0; i < sizeof(T); ++i) {
-            value = static_cast<U>((value << 8) | data_[offset_ + i]);
+            value = (value << 8U) | static_cast<uint64_t>(data_[offset_ + i]);
         }
         offset_ += sizeof(T);
-        return static_cast<T>(value);
+        return static_cast<T>(static_cast<U>(value));
     }
 
     float read_float() {
@@ -163,9 +163,9 @@ public:
     void write_int(T value) {
         static_assert(std::is_integral_v<T> && !std::is_same_v<T, bool>);
         using U = std::make_unsigned_t<T>;
-        U v = static_cast<U>(value);
+        const auto v = static_cast<uint64_t>(static_cast<U>(value));  // unsigned and wide: no int promotion
         for (size_t i = sizeof(T); i > 0; --i) {
-            buf_.push_back(static_cast<uint8_t>((v >> ((i - 1) * 8)) & 0xff));
+            buf_.push_back(static_cast<uint8_t>(v >> ((i - 1) * 8U)));
         }
     }
 
@@ -825,6 +825,9 @@ public:
             std::rethrow_exception(state->error);
         }
         if constexpr (!std::is_void_v<T>) {
+            if (!state->value) {
+                throw InternalError("a completed future has no value");
+            }
             return std::move(*state->value);
         }
     }
@@ -949,7 +952,7 @@ inline void on_continuation(uint64_t data, int8_t poll_result) {
     auto* raw = reinterpret_cast<std::shared_ptr<RustFuture>*>(data);
     post([raw, poll_result] {
         std::unique_ptr<std::shared_ptr<RustFuture>> owner(raw);
-        std::shared_ptr<RustFuture> future = *owner;
+        const std::shared_ptr<RustFuture>& future = *owner;
         if (poll_result == RUST_FUTURE_POLL_READY) {
             future->finish();
             std::lock_guard<std::mutex> lock(future->mutex);

@@ -27,7 +27,7 @@ impl Gen<'_> {
                 )
             };
             format!(
-                "std::shared_ptr<{name}> lift_{name}(uint64_t handle) {{\n    if ((handle & 1) == 0) {{\n        return std::make_shared<{impl_name}>(handle);\n    }}\n    {lift_foreign}\n}}\n\nuint64_t lower_{name}(const std::shared_ptr<{name}>& value) {{\n    if (auto* rust = dynamic_cast<{impl_name}*>(value.get())) {{\n        return rust->uniffi_clone_handle();\n    }}\n    {lower_foreign}\n}}\n\n"
+                "std::shared_ptr<{name}> lift_{name}(uint64_t handle) {{\n    if ((handle & 1U) == 0) {{\n        return std::make_shared<{impl_name}>(handle);\n    }}\n    {lift_foreign}\n}}\n\nuint64_t lower_{name}(const std::shared_ptr<{name}>& value) {{\n    if (auto* rust = dynamic_cast<{impl_name}*>(value.get())) {{\n        return rust->uniffi_clone_handle();\n    }}\n    {lower_foreign}\n}}\n\n"
             )
         } else {
             format!(

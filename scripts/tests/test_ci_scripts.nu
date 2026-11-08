@@ -7,6 +7,7 @@ use runner.nu *
 use ../ci/deps_update.nu [present commit_message series lock_versions downgrades pins pins_changed next_patch upgrade_message]
 use ../ci/publish_crate.nu [already_published package_args]
 use ../ci/apt.nu [commands]
+use ../ci/clang_tidy.nu [tidy_args]
 use ../ci/check_static.nu [is_static]
 use ../ci/prune_releases.nu [from_gh from_gitea doomed newest]
 use ../ci/gitea_release.nu [release_payload]
@@ -229,6 +230,12 @@ def "test deps_update: downgrades lists lowered packages only" [] {
 def "test deps_update: a crate kept at two versions is no downgrade" [] {
     let lock = lock_versions $LOCK
     assert equal (downgrades $lock $lock) []
+}
+
+def "test clang_tidy: C++17, the bindings, and the SDK on macOS only" [] {
+    assert equal (tidy_args "/o" "linux") ["--" "-std=c++17" "-I/o"]
+    assert equal (tidy_args "/o" "macos" "/sdk") ["--" "-std=c++17" "-I/o" "-isysroot" "/sdk"]
+    assert equal (tidy_args "/o" "linux" "/sdk") ["--" "-std=c++17" "-I/o"]
 }
 
 def main [] { run-tests }

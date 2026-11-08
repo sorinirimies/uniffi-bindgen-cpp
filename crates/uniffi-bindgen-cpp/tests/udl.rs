@@ -331,3 +331,18 @@ callback interface Sink { string push(string s); };
     assert!(h.contains("virtual std::string push(const std::string& s) = 0;"));
     assert!(h.contains("virtual std::string label(const std::string& prefix) = 0;"));
 }
+
+// clang-tidy (performance-move-const-arg): trivially copyable values are copied, the rest moved.
+#[test]
+fn only_values_that_are_not_trivially_copyable_are_moved() {
+    let h = generate().header;
+    assert!(h.contains("code(code_)"), "int32_t field is copied");
+    assert!(
+        h.contains("return ::sample::Point{f0, f1, std::move(f2)};"),
+        "doubles copied, optional<string> moved"
+    );
+    assert!(
+        h.contains("::sample::Shape::Circle{std::move(f0), f1}"),
+        "a record holding a string is moved"
+    );
+}

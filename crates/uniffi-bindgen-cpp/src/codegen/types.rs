@@ -4,7 +4,7 @@
 use std::collections::BTreeSet;
 
 use uniffi_bindgen::ComponentInterface;
-use uniffi_bindgen::interface::{Callable, DefaultValue, FfiType, Literal, Radix, Type};
+use uniffi_bindgen::interface::{AsType, Callable, DefaultValue, FfiType, Literal, Radix, Type};
 
 use super::names::{class, member, string_literal};
 use crate::config::{Config, CustomTypeConfig};
@@ -149,6 +149,51 @@ impl<'a> Gen<'a> {
             | Type::Boolean => self.cpp_type(t),
             Type::Enum { .. } if self.is_flat_enum(t) => self.cpp_type(t),
             _ => format!("const {}&", self.cpp_type(t)),
+        }
+    }
+
+    /// `std::move(expr)`, or `expr` when the C++ type of `t` is trivially copyable
+    /// (moving it would only be noise).
+    pub(crate) fn moved(&self, t: &Type, expr: &str) -> String {
+        if self.is_trivially_copyable(t, &mut Vec::new()) {
+            expr.to_owned()
+        } else {
+            format!("std::move({expr})")
+        }
+    }
+
+    /// Whether the C++ type of `t` is trivially copyable: numbers, `bool`, time points and
+    /// durations, flat enums, and optionals and records of those. External and custom types
+    /// are treated as not trivially copyable.
+    fn is_trivially_copyable(&self, t: &Type, seen: &mut Vec<String>) -> bool {
+        match t {
+            Type::UInt8
+            | Type::Int8
+            | Type::UInt16
+            | Type::Int16
+            | Type::UInt32
+            | Type::Int32
+            | Type::UInt64
+            | Type::Int64
+            | Type::Float32
+            | Type::Float64
+            | Type::Boolean
+            | Type::Timestamp
+            | Type::Duration => true,
+            Type::Enum { .. } => self.is_flat_enum(t),
+            Type::Optional { inner_type } => self.is_trivially_copyable(inner_type, seen),
+            Type::Record { name, .. } if !self.ci.is_external(t) => {
+                if seen.contains(name) {
+                    return false;
+                }
+                seen.push(name.clone());
+                self.ci.get_record_definition(name).is_some_and(|r| {
+                    r.fields()
+                        .iter()
+                        .all(|f| self.is_trivially_copyable(&f.as_type(), seen))
+                })
+            }
+            _ => false,
         }
     }
 

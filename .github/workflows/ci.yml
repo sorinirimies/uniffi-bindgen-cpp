@@ -37,6 +37,10 @@ jobs:
         run: nu scripts/ci/apt.nu
       - name: Quality gate
         run: nu scripts/ci/quality_gate.nu
+      - name: Install clang-tidy
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends clang-tidy
+      - name: clang-tidy on the generated C++
+        run: nu scripts/ci/clang_tidy.nu
 
   # Generates C++ for uniffi's own fixture suite and the tour crate, compiles it
   # with warnings as errors and runs the C++ tests, with GCC and Clang, with and
