@@ -4,6 +4,12 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.3.1](https://github.com/sorinirimies/uniffi-bindgen-cpp/compare/v0.3.0...v0.3.1) — 2026-11-08
+
+### 🐛 Bug fixes
+
+- Accept the toml versions uniffi_bindgen does ([`2d3cd70`](https://github.com/sorinirimies/uniffi-bindgen-cpp/commit/2d3cd70a1ca6f50110f7821e54c688366dfea1df))
+
 ## [0.3.0](https://github.com/sorinirimies/uniffi-bindgen-cpp/compare/v0.2.0...v0.3.0) — 2026-11-08
 
 ### ⚠️ Breaking changes
