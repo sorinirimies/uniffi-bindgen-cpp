@@ -5,7 +5,7 @@
 [![Fuzz](https://github.com/sorinirimies/uniffi-bindgen-cpp/actions/workflows/fuzz.yml/badge.svg)](https://github.com/sorinirimies/uniffi-bindgen-cpp/actions/workflows/fuzz.yml)
 [![crates.io](https://img.shields.io/crates/v/uniffi-bindgen-cpp.svg)](https://crates.io/crates/uniffi-bindgen-cpp)
 
-C++17 bindings generator for [UniFFI](https://mozilla.github.io/uniffi-rs/) 0.32.
+C++17 bindings generator for [UniFFI](https://mozilla.github.io/uniffi-rs/) 0.33.
 
 Point it at a library built with UniFFI and it writes a header and a source file per
 component, plus one shared runtime header. The generated code calls the scaffolding
@@ -40,6 +40,8 @@ or download the archive for your platform from the
 
 | uniffi-bindgen-cpp | UniFFI |
 |---|---|
+| 0.4 | 0.33 |
+| 0.3 | 0.32 |
 | 0.2 | 0.32 |
 | 0.1 | 0.31 |
 
@@ -283,7 +285,7 @@ Layout:
 ```
 crates/uniffi-bindgen-cpp/   the crate: codegen/ (the generator), runtime/ (the C++ runtime header), cli, config; tests/
 fixtures/tour/    a UniFFI crate that uses every feature, with the C++ test that runs against it (just e2e)
-fixtures/uniffi/  uniffi-rs v0.32.2 fixtures and examples (scripts/vendor_fixtures.nu), each with its C++ test in cpp/ (just fixtures)
+fixtures/uniffi/  uniffi-rs v0.33.0 fixtures and examples (scripts/vendor_fixtures.nu), each with its C++ test in cpp/ (just fixtures)
 examples/         CMake projects: the tour crate, and stem-mqtt's broker and client (just cmake)
 fuzz/             cargo-fuzz targets (nightly), one per parser/decoder
 scripts/          all tooling, Nushell only (justfile recipes run in nu too):
