@@ -4,6 +4,33 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.4.0](https://github.com/sorinirimies/uniffi-bindgen-cpp/compare/v0.3.1...v0.4.0) — 2026-11-26
+
+### ⚠️ Breaking changes
+
+- Support UniFFI 0.33 ([`fb58cd8`](https://github.com/sorinirimies/uniffi-bindgen-cpp/commit/fb58cd8a9d5c39a88321718672570c7aea9c8e8b))
+
+### ✨ Features
+
+- Support UniFFI 0.33 ([`fb58cd8`](https://github.com/sorinirimies/uniffi-bindgen-cpp/commit/fb58cd8a9d5c39a88321718672570c7aea9c8e8b))
+
+### 📦 Dependencies
+
+- Nightly cargo update 2026-11-24 ([`311f125`](https://github.com/sorinirimies/uniffi-bindgen-cpp/commit/311f125f56e53c9769d9faf69d327b56bccf9940))
+- Nightly cargo update 2026-11-17 ([`39b7d3e`](https://github.com/sorinirimies/uniffi-bindgen-cpp/commit/39b7d3eca91ee2a9564ac3d0f8c49241a6a0e6cc))
+- Nightly cargo update 2026-11-14 ([`1668099`](https://github.com/sorinirimies/uniffi-bindgen-cpp/commit/16680992ba12acb429c3b3f7ce587a272161916e))
+- Nightly cargo update 2026-11-13 ([`155e330`](https://github.com/sorinirimies/uniffi-bindgen-cpp/commit/155e33092ae6d10b2d648e9e70f1be44384ed19e))
+- Nightly cargo update 2026-11-09 ([`31fb3c9`](https://github.com/sorinirimies/uniffi-bindgen-cpp/commit/31fb3c9abcf3f401605fb7ab9eb37498486c7cca))
+
+### 🔄 CI and release
+
+- Move the nightly failure notice into scripts/ci/notify_failure.nu ([`bb036d6`](https://github.com/sorinirimies/uniffi-bindgen-cpp/commit/bb036d665d546cedd9af660362c76e90fa8a39d9))
+- Open an issue when the nightly fails; fix header comment ([`8c1a4c3`](https://github.com/sorinirimies/uniffi-bindgen-cpp/commit/8c1a4c3a586433ef658ebb431594474cfe57f029))
+
+### 💄 Style
+
+- Collapse nested if ([`5b8df7a`](https://github.com/sorinirimies/uniffi-bindgen-cpp/commit/5b8df7af3cdc70771f9c6d90115c36b60363582c))
+
 ## [0.3.1](https://github.com/sorinirimies/uniffi-bindgen-cpp/compare/v0.3.0...v0.3.1) — 2026-11-08
 
 ### 🐛 Bug fixes
